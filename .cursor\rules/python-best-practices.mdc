@@ -1,0 +1,360 @@
+---
+alwaysApply: true
+---
+
+# Python Best Practices for the Telegram Nutrition Bot
+**Rule type:** Auto-attached for `*.py`, `tests/**/*.py`, and `scripts/**/*.py` files.  
+These rules apply to all code generated or modified in this repository.
+
+---
+
+## 1) Code Organization and Structure
+
+### 1.1 Directory Structure Best Practices
+- **Flat > deeply nested** (but not always). Keep paths short and refactor as the project grows.
+- **Use packages (dirs with `__init__.py`)** to group related modules.
+- Prefer a top-level `src/` layout to separate application code from project meta files.
+- Keep **entry points** (`main.py` or `cli.py`) thin; delegate to `app/` modules.
+- Anything that touches external systems (Telegram, Google, LLMs, Files) lives in `adapters/`.
+
+**Typical Project Structure**
+```
+project_name/
+├─ src/
+│  ├─ app/                     # Or 'bot/' if you prefer
+│  │  ├─ __init__.py
+│  │  ├─ main.py               # Entrypoint: start bot
+│  │  ├─ config.py             # Settings & env loading
+│  │  ├─ containers.py         # DI/container (optional)
+│  │  ├─ logging.py            # Logging setup
+│  │  ├─ router.py             # Dispatcher/routers
+│  │  ├─ handlers/             # Telegram handlers
+│  │  │  ├─ __init__.py
+│  │  │  ├─ start.py
+│  │  │  ├─ meals_text.py
+│  │  │  ├─ meals_photo.py
+│  │  │  ├─ meals_voice.py
+│  │  │  └─ reports.py
+│  │  ├─ services/             # Domain services (pure when possible)
+│  │  │  ├─ __init__.py
+│  │  │  ├─ nutrition.py
+│  │  │  ├─ estimation.py
+│  │  │  └─ reporting.py
+│  │  ├─ adapters/             # I/O integrations
+│  │  │  ├─ __init__.py
+│  │  │  ├─ telegram.py
+│  │  │  ├─ google_sheets.py
+│  │  │  ├─ storage.py         # local/remote fs
+│  │  │  └─ llm.py
+│  │  ├─ schemas.py            # pydantic models, enums
+│  │  ├─ repositories.py       # persistence abstraction (if any)
+│  │  └─ utils.py
+│  └─ scripts/
+│     ├─ backfill_reports.py
+│     └─ migrate_sheet_schema.py
+├─ tests/
+│  ├─ conftest.py
+│  ├─ unit/
+│  ├─ integration/
+│  └─ e2e/                     # Optional; can use Telegram test chat
+├─ docs/
+│  ├─ conf.py
+│  └─ index.rst
+├─ .env.example
+├─ pyproject.toml
+├─ README.md
+└─ Makefile
+```
+
+### 1.2 File & Naming Conventions
+- **Modules:** lowercase with underscores (e.g., `meal_parser.py`).
+- **Packages:** lowercase (e.g., `handlers`).
+- **Classes:** `CamelCase`. **Exceptions** end with `Error`.
+- **Functions/vars:** `snake_case` and must be verbs for actions (e.g., `estimate_kcal`).
+- **Constants:** `UPPER_SNAKE_CASE` (units in name if relevant, e.g., `DEFAULT_PROTEIN_G`).
+- **Tests:** mirror module path; test files start with `test_`.
+- **Handlers:** prefix by type and action (e.g., `handle_add_photo`, `handle_weight_log`).
+
+### 1.3 Module Organization
+- Single responsibility per module.
+- Public API via `__all__` where helpful.
+- Put **imports at top**; standard, third-party, local grouped and separated by a blank line.
+- Order imports alphabetically within groups.
+
+---
+
+## 2) Imports
+- Prefer **absolute imports**. Use relative only within the same package for short references.
+- Never use wildcard imports (`from x import *`).
+- If optional dependencies are heavy (e.g., `matplotlib`), isolate them in a small adapter module.
+
+---
+
+## 3) Dependency & Environment Management
+- Use **`pyproject.toml`** (Poetry/uv/pip-tools). Pin direct deps; allow `^` minor updates in dev.
+- Maintain two groups: `main` and `dev` (linters, test tools).
+- Commit **`constraints.txt`** (pip-tools) or lockfile (Poetry/uv).
+- Provide **`.env.example`** listing all required variables with comments.
+- Sensitive values must not be committed; use secrets managers or CI secrets.
+
+**Minimum ENV variables**
+```
+TELEGRAM_BOT_TOKEN=
+SHEETS_SPREADSHEET_ID=
+GOOGLE_APPLICATION_CREDENTIALS= # path to json or env var content
+OPENAI_API_KEY=                  # or other LLM provider key
+TIMEZONE_DEFAULT=Europe/Madrid
+```
+
+---
+
+## 4) Configuration
+- Use `pydantic-settings` or a small `@dataclass` loader for envs.
+- Validate at startup; fail fast with actionable errors.
+- Support per-env overrides (`APP_ENV=dev|staging|prod`).
+
+```python
+class Settings(BaseSettings):
+    telegram_token: SecretStr
+    spreadsheet_id: str
+    timezone_default: str = "Europe/Madrid"
+    model_name: str = "gpt-4o-mini"
+    class Config:
+        env_file = ".env"
+```
+
+---
+
+## 5) Logging
+- Use structured logging (`logging` or `structlog`). Initialize in `app/logging.py`.
+- **Never log PII** (names, photos, exact text). Use IDs or hashes.
+- Include: timestamp (UTC), level, module, correlation id (user_id/message_id), and event.
+- Levels: `DEBUG` (development only), `INFO` (normal ops), `WARNING` (recoverable), `ERROR` (action needed).
+- For handlers, log **trigger** + summarized outcome (kcal estimate, success/failure).
+
+---
+
+## 6) Error Handling
+- Define a small exception hierarchy in `app/exceptions.py`:
+  - `AppError` → `ValidationError`, `ExternalServiceError`, `PermissionError`, `RateLimitError`, `NotFoundError`, etc.
+- Catch at the **edges** (Telegram handlers, CLI) and convert to **user-facing messages**.
+- Use `retry` with exponential backoff for transient external errors (5xx, rate limit).
+- Avoid bare `except`. Always log with context and re-raise specific exceptions.
+
+---
+
+## 7) Type Hints & Data Models
+- **Type hints are mandatory** for all public funcs and class methods.
+- Use `pydantic` models for external data contracts (Telegram payloads, Sheets rows).
+- For numeric domain fields, specify **units** in the model field name or `Field(description=...)`.
+
+```python
+class MealEntry(BaseModel):
+    at: datetime  # user local time
+    source: Literal["photo","voice","text"]
+    description: str = ""
+    calories_kcal: conint(ge=0, le=5000)
+    protein_g: conint(ge=0, le=500)
+    weight_kg: Optional[confloat(gt=0, lt=400)] = None
+```
+
+Run **`mypy`** in CI with strict mode for `src/`. Provide stubs for third-party libs as needed.
+
+---
+
+## 8) Async & Concurrency
+- Use **async** end-to-end (aiogram/PTB v20+). Never block the event loop.
+- Reuse HTTP clients (`aiohttp`/`httpx.AsyncClient`) and Telegram bot instance; close on shutdown.
+- All network calls must set **timeouts** and **retries**.
+- Respect Telegram rate limits; use a queue/backoff for bursts.
+- Offload CPU-heavy work (image parsing) to a thread/process pool via `anyio.to_thread.run_sync`.
+- For scheduled jobs, use `apscheduler` (async) and ensure **idempotency**.
+
+---
+
+## 9) Testing
+- Use **pytest** with **pytest-asyncio**; prefer **unit tests** for pure functions and **integration tests** for adapters.
+- Provide fixtures for: settings, fake Telegram updates, temp Sheets.
+- Aim for **90%+ coverage**; critical modules ≈ 100%.
+- Write **doctests** in docstrings for pure functions where feasible.
+- Mark integration tests with `@pytest.mark.integration`; allow skipping in CI via env.
+
+---
+
+## 10) Linting & Formatting
+- **Format:** `black` + `isort` (or `ruff format`).
+- **Lint:** `ruff` (includes many flake8 rules) + `pydocstyle/flake8-docstrings` if not using ruff’s D rules.
+- Enforce via **pre-commit** and CI.
+```yaml
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.6
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
+  - repo: https://github.com/psf/black
+    rev: 24.4.2
+    hooks: [{id: black}]
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks: [{id: isort}]
+```
+
+---
+
+## 11) Security & Privacy
+- Treat all inputs as **untrusted**; validate early.
+- **Never store raw images/voices** unless explicitly required and documented; prefer `file_id`.
+- Scrub/redact user text before logging or sending to LLMs when possible.
+- Keep tokens in env or secret store; rotate regularly.
+- Add a **medical disclaimer**; bot is **not a medical device**.
+
+---
+
+## 12) Data, Units, and Business Rules
+- Units: **kcal**, **g**, **kg**, **%**, **min**. Always state units.
+- Rounding: document where it happens (e.g., kcal to nearest 10 for UI).
+- Timezones: store **UTC** + user’s **IANA TZ**; convert for UI/reports.
+- Validation ranges: weight 30–300 kg, protein 0–300 g/day, kcal 800–6000/day (configurable).
+
+---
+
+## 13) Google Sheets / Persistence
+- One module owns the contract with Sheets; document worksheet names and columns.
+- Use **idempotent writes** (dedupe by `(user_id, at)` key or a UUID).
+- Implement **retry** & **quota** handling; exponential backoff.
+- Keep a **migration script** for schema updates. Version the schema in code.
+
+---
+
+## 14) Telegram Handlers Conventions
+- Each handler:
+  - Validates input (caption/text length, file size/type).
+  - Handles permissions and state (FSM if used).
+  - Calls a **pure service**; does side effects last.
+  - Returns clear UX: success text + quick actions.
+  - Emits analytics events (e.g., `meal_logged`, `report_sent`).
+
+Naming:
+- `handle_<noun>_<verb>` (e.g., `handle_meal_add_from_text`).
+
+---
+
+## 15) AI/LLM Calls
+- Centralize in `adapters/llm.py`.
+- Define clear inputs/outputs; **normalize units**; include a **confidence score**.
+- Post-process to guard hallucinations (e.g., clamp kcal to plausible ranges).
+- Timeout & retry; log prompt IDs only (no full content) unless in dev.
+
+---
+
+## 16) Internationalization (i18n)
+- Keep user-facing strings in a `locales/` catalog or simple dicts.
+- Avoid concatenation; use templates with placeholders.
+- Default language: English; support additional BCP-47 codes as needed.
+
+---
+
+## 17) Performance
+- Avoid unnecessary DataFrame usage; use plain Python for small datasets.
+- Cache static food tables in memory with TTL; invalidate on updates.
+- Batch network I/O where possible (Sheets append ranges).
+
+---
+
+## 18) Versioning & Releases
+- Use **SemVer**. Tag releases and maintain `CHANGELOG.md` (Keep a Changelog style).
+- Bump version in a single `__version__` source (`src/app/__init__.py`).
+
+---
+
+## 19) Makefile / Developer UX
+Provide convenient commands:
+```
+make install          # install deps
+make lint             # ruff + black + isort + pydocstyle
+make test             # pytest -q
+make run              # run the bot locally
+make format           # reformat code
+```
+
+---
+
+## 20) Code Review Checklist (Cursor should enforce)
+- [ ] File/module purpose documented at top if non-obvious.
+- [ ] Public functions/classes have **reST** docstrings with params/returns/raises.
+- [ ] Names descriptive; units included where relevant.
+- [ ] No blocking calls in async paths; timeouts set on I/O.
+- [ ] Errors are specific; user-facing messages are friendly.
+- [ ] No PII in logs; tokens not printed.
+- [ ] Tests added/updated; coverage unchanged or improved.
+- [ ] Import groups and order conform to `isort`/`ruff`.
+- [ ] Handlers follow the convention and call services, not vice versa.
+
+---
+
+## 21) Example Skeletons
+
+**Handler skeleton**
+```python
+async def handle_add_photo(update: Update, context: Ctx) -> None:
+    """Estimate calories from a photo and log a meal.
+
+    Steps: download photo -> call estimator -> log to Sheets -> reply.
+    Validates caption length and file size; clamps estimates to sane ranges.
+    """
+    # 1) Validate & fetch file
+    # 2) Call service layer
+    # 3) Persist & reply
+```
+
+**Service function skeleton**
+```python
+async def estimate_meal_from_photo(file_id: str, locale: str) -> MealEntry:
+    """Return a normalized MealEntry from a Telegram photo file_id."""
+    ...
+```
+
+**Repository call (Sheets)**
+```python
+async def append_meal(entry: MealEntry) -> str:
+    """Append meal to Sheets and return inserted row id."""
+    ...
+```
+
+---
+
+## 22) Cursor Enforcement
+When generating or editing code, Cursor should:
+- Create/maintain the structure in §1.1.
+- Follow naming in §1.2 and handler conventions in §14.
+- Add/maintain **type hints**, **timeouts**, and **docstrings** per these rules.
+- Refuse to add logic without tests if the module previously had tests.
+- Propose refactors when a module exceeds ~400 lines or has multiple responsibilities.
+
+---
+
+## 23) Example `pyproject.toml` Snippet
+```toml
+[tool.ruff]
+line-length = 100
+select = ["E","F","I","N","D","UP"]
+ignore = ["D105","D107"]
+
+[tool.pytest.ini_options]
+addopts = "-q --disable-warnings"
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+```
+
+---
+
+## 24) Notes
+- Prefer **pure functions** in `services/`; they are easiest to test.
+- Keep **adapters thin** and well-documented; they are failure-prone surfaces.
+- Be explicit about **units, timezones, and defaults** in code and docs.

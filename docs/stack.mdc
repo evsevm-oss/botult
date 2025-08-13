@@ -1,0 +1,13 @@
+## Выбранный стек (этап 0)
+
+- Язык/рантайм: Python 3.11+
+- Telegram Bot API: `aiogram` (v3)
+- Внутренние сервисы/REST: `FastAPI` + `uvicorn`
+- Данные: PostgreSQL + SQLAlchemy (2.x) + Alembic (миграции)
+- Кэш/сессии: Redis
+- Очередь: Celery (брокер Redis)
+- Объектное хранилище изображений: MinIO/S3-совместимые (через `boto3`/`minio`)
+- HTTP-клиент: `httpx`
+- Конфигурация: `pydantic-settings` + `.env`
+- Логирование: `structlog`
+

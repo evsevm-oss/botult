@@ -1,0 +1,8 @@
+---
+alwaysApply: false
+---
+
+Telegram API token:
+<PLACEHOLDER_TELEGRAM_BOT_TOKEN>
+
+Храните реальный токен в файле `.env` в переменной `TELEGRAM_BOT_TOKEN`.

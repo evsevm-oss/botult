@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+
+# Environments
+.env
+.venv/
+venv/
+
+# Editors/IDE
+.idea/
+.vscode/
+
+# Builds
+dist/
+build/
+
+# Node (for WebApp frontend later)
+node_modules/
+
+

@@ -1,0 +1,234 @@
+---
+alwaysApply: true
+---
+
+# Documentation Rules for the Telegram Nutrition Bot (Python)
+
+These rules **must be followed in every file and pull request** in this repository. Cursor should apply them automatically when generating or editing code.
+
+## 1) Purpose and Scope
+- Maintain **clear, consistent, Sphinx-ready documentation** for all Python code in this project (Telegram bot for calorie tracking and AI diet coaching).
+- Audience: other developers, future maintainers, and auditors (security & compliance).
+- Target stack: **Python 3.11+**, typical libs: `aiogram`/`python-telegram-bot`, `pydantic`, `pandas`, `numpy`, `matplotlib`, Google APIs (Sheets/Drive), and any LLM clients.
+- Documentation MUST be **English**, concise, and actionable.
+
+## 2) Documentation Style
+- **Docstring style:** reStructuredText (**reST**, Sphinx-compatible). Use field lists (`:param:`, `:type:`, `:returns:`, `:rtype:`, `:raises:`).
+- **Type hints are mandatory.** Docstrings should describe **behavior**; types are declared in code.
+- **Imperative, present tense:** “Return…”, “Validate…”, “Send…”. Avoid vague phrases like “handles stuff”.
+- Use **one sentence summary line** (<= 120 chars), then a blank line, then details.
+- Include **examples** for non-trivial logic.
+- Use **ASCII punctuation**; avoid emojis in code docs.
+
+## 3) What Must Be Documented
+Document the following at minimum.
+
+### 3.1 Modules (`.py` files)
+- **Purpose** and high-level responsibilities.
+- **Key dependencies** and why they’re used.
+- **Configuration/ENV** variables the module reads.
+- **Side effects** (network calls, file I/O, DB/Sheet writes).
+
+### 3.2 Public Classes/Dataclasses
+- What the class represents; invariants.
+- For dataclasses/models: describe each field’s **meaning**, **units**, and **validation rules**.
+- Document **methods** individually (see 3.3).
+
+### 3.3 Functions/Methods (including async)
+Include the following sections (omit if truly not applicable):
+- **Summary line**: what the function does and, if relevant, where it’s used.
+- **Parameters**: `:param name:`, `:type name:` (only if type hint is not obvious or is a `typing` alias).
+- **Returns**: `:returns:` explanation and `:rtype:`.
+- **Raises**: list concrete exceptions and when they occur.
+- **Yields**: for generators/async generators.
+- **Side Effects**: network requests, DB/Sheet writes, message sends, caching, logging.
+- **Concurrency**: locking, background tasks, rate limits, timeouts, retries.
+- **Examples**: at least one realistic usage or handler snippet.
+- **Notes**: security/privacy constraints, precision limits, business rules.
+
+### 3.4 Telegram Handlers / Commands
+Add a **handler header** (first paragraph) that explicitly states:
+- **Trigger** (e.g., `/start`, photo message, voice message, callback).
+- **User input** expected and validation.
+- **Bot response** outline (text, photo, caption, keyboard).
+- **Permissions/State** requirements (authenticated, premium, onboarding, FSM state).
+- **Rate limits** and **error UX** (fallback text).
+
+### 3.5 AI / Prompted Components
+- Document **system prompts**, **persona** (Ultima, cyberpunk AI-dietitian), tone, and safety constraints.
+- For each model call: inputs (anonymized fields), outputs, **hallucination guardrails**, and **post-processing** (e.g., unit normalization).
+- Reference **nutrition sources/assumptions** used by heuristics (e.g., calorie tables).
+
+### 3.6 Data Contracts & Schemas
+- Keep a dedicated schema module (e.g., `schemas.py`) with pydantic models; document fields with units:
+  - Calories (kcal), Protein (g), Weight (kg), Body fat (%), Timestamp (ISO 8601, user TZ).
+- For Google Sheets, document **worksheet names**, **columns**, **types**, and **idempotency** rules.
+- Document **analytics events**: name, properties, when fired.
+
+## 4) Templates (Copy/Paste)
+
+### 4.1 Function/Method (reST)
+```python
+def estimate_calories_from_text(text: str, locale: str = "en") -> int:
+    """Estimate total calories mentioned in free-form meal text.
+
+    The function uses rule-based parsing + model inference to extract dish
+    mentions and portion sizes, then maps them to nutrition data.
+
+    :param text: User-provided meal description in natural language.
+    :param locale: BCP-47 language tag used for parsing and food DB mapping.
+    :returns: Estimated total energy in **kcal** (rounded).
+    :rtype: int
+    :raises ValueError: If ``text`` is empty or too short to parse.
+    :raises LookupError: If nutrition data is unavailable for key items.
+    :side effects: Reads local food DB cache; emits debug logs.
+    :concurrency: Pure CPU; safe to call in parallel.
+    :example:
+        >>> estimate_calories_from_text("2 eggs and a banana")
+        250
+    :notes: Estimates are approximate; do not use for medical diagnosis.
+    """
+    ...
+```
+
+### 4.2 Telegram Command Handler
+```python
+async def handle_add_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Process a **photo** message to estimate calories and log the meal.
+
+    **Trigger:** user sends a photo with optional caption.
+
+    **Bot reply:** estimate kcal & protein, confirm entry, and show quick actions.
+
+    **State:** requires authenticated user; allowed in onboarding.
+
+    :param update: Telegram update containing the photo.
+    :param context: Bot context with user/session info.
+    :raises PermissionError: If the user lacks access (no active subscription).
+    :side effects: Downloads file from Telegram; writes to Google Sheets; logs analytics.
+    :concurrency: Network I/O; uses 30s timeout and 3 retries on 5xx.
+    :example: N/A (handler bound via dispatcher in ``bot.py``).
+    :notes: Redact personal data in logs; store only file_id, not the image bytes.
+    """
+    ...
+```
+
+### 4.3 Class / Dataclass
+```python
+@dataclass(slots=True)
+class MealEntry:
+    """Normalized meal record stored in Google Sheets.
+
+    :param at: Event time in the **user's timezone** (ISO 8601).
+    :param source: One of {"photo","voice","text"}.
+    :param description: Original user description (may be empty).
+    :param calories_kcal: Rounded energy value in kcal.
+    :param protein_g: Rounded protein value in grams.
+    :param weight_kg: Optional user's weight in kg at the same morning.
+    :param body_fat_pct: Optional body fat percent (0–100).
+    :param meta: Opaque metadata (e.g., telegram message id).
+    :notes: Keep PII out of this model; link to user by numeric user_id only.
+    """
+```
+
+### 4.4 Module Header
+```python
+"""Meal ingestion pipeline: parsers, validators, and writers.
+
+Reads Telegram updates for text/voice/photo, normalizes to MealEntry, and
+writes to Google Sheets. Config via env: ``SHEETS_SPREADSHEET_ID``,
+``SHEETS_SERVICE_ACCOUNT``, ``TIMEZONE_DEFAULT``.
+"""
+```
+
+## 5) Precision, Units, and Business Rules
+- **Units:** kcal, g, kg, %, minutes. Always state units in docstrings.
+- **Rounding:** describe rounding at the point it occurs (e.g., kcal to nearest 10).
+- **Defaults:** document default calorie/protein targets and where they come from.
+- **Limits:** document accepted ranges (e.g., weight 30–300 kg; body fat 3–60%).
+
+## 6) Exceptions & Error Messages
+- Prefer **specific exceptions**; document each under ``:raises:`` with trigger conditions.
+- Error messages must be **actionable** and safe for logs (no PII).
+- For Telegram UX, document the **fallback message** shown to the user.
+
+## 7) Security & Privacy Notes (must appear where relevant)
+- Document **what personal data** is processed and stored; state **retention**.
+- Describe **token handling** (Telegram, Google, LLM): source, scope, rotation.
+- Note use of **least privilege**, encrypted storage, and redaction in logs.
+- Avoid claiming medical authority; include disclaimer notes where needed.
+
+## 8) Examples & Snippets
+- Include **doctest-able** examples for pure functions.
+- For handlers, include pseudo snippets in docstrings or cross-reference tests.
+
+## 9) Documentation Tooling & CI
+- Build docs with **Sphinx** (`sphinx.ext.autodoc`, `napoleon` optional only for cross-compat).
+- Enforce doc quality with:
+  - `pydocstyle` / `flake8-docstrings` (D100–D418)
+  - `interrogate` (docstring coverage) with **min 100% public / 90% overall**
+- Add a **pre-commit** config (example):
+```yaml
+repos:
+  - repo: https://github.com/pycqa/pydocstyle
+    rev: 6.3.0
+    hooks:
+      - id: pydocstyle
+        args: ["--convention=pep257"]
+  - repo: https://github.com/econchick/interrogate
+    rev: 1.7.0
+    hooks:
+      - id: interrogate
+        args: ["-v", "--fail-under=90"]
+```
+- CI must fail if docstring checks fail.
+
+## 10) Cursor Enforcement (what Cursor should do)
+- When writing or editing code, **generate full reST docstrings** following §3 and §4.
+- If a public function/class lacks a docstring, **add it proactively**.
+- When adding params or changing behavior, **update docstrings in the same diff**.
+- Suggest better names/units if ambiguous and add a **`:notes:`** section explaining choices.
+- Prefer **short, precise** text over long narratives.
+
+## 11) Naming & Commenting
+- Names must be descriptive (e.g., `estimate_calories_from_text`, not `calc1`).
+- Inline comments explain **why**, not **what**. Keep them short.
+- Use `TODO(username, YYYY-MM-DD):` for deferred work with a deadline/hint.
+
+## 12) Domain-Specific Checklists
+- **Handlers**: trigger, inputs, validation, response, side effects, errors, rate limits, analytics event(s).
+- **Schedulers/Jobs**: schedule, idempotency, retries, backoff, output artifact(s).
+- **Google Sheets**: worksheet, columns, units, append/update semantics, quotas.
+- **Reports**: time range, timezone handling, rounding rules, chart axes/labels.
+- **AI Calls**: prompt source, model/version, safety filters, post-processing, confidence score.
+
+---
+
+## Appendix A — Minimal vs. Rich Examples
+
+### Minimal function docstring
+```python
+def round_kcal(value: float) -> int:
+    """Round a floating-point **kcal** value to the nearest integer.
+
+    :param value: Energy value in **kcal**.
+    :returns: ``int`` kcal.
+    """
+    ...
+```
+
+### Rich example with raises & notes
+```python
+async def send_daily_report(user_id: int, tz: str) -> None:
+    """Generate and send yesterday's calorie report to a Telegram user.
+
+    :param user_id: Telegram numeric user id.
+    :param tz: IANA timezone, e.g., ``Europe/Madrid``.
+    :raises LookupError: If there is no data for the previous day.
+    :raises TimeoutError: On Telegram API send timeout.
+    :side effects: Reads from Sheets; sends a message/photo to Telegram.
+    :concurrency: Uses network I/O with 20s timeout and retry(2).
+    :notes: Report day starts at **03:00** local time by default.
+    """
+    ...
+```
