@@ -11,9 +11,8 @@
 - Конфигурация: `pydantic-settings` + `.env`
 - Логирование: `structlog`
 
-### Контент для аватара/видео/голоса
-- Image Gen: OpenAI Images (DALL·E) и/или Stability AI (SDXL)
-- TTS: ElevenLabs (основной), OpenAI TTS (fallback)
-- Talking‑Head: HeyGen или D‑ID (через их API)
-- General Video (опционально): Runway/Pika/Luma — по потребности
+### Контент для аватара/видео/голоса (минимум)
+- Image Gen: OpenAI Images (DALL·E)
+- TTS: OpenAI TTS (gpt‑4o‑mini‑tts)
+- Talking‑Head: D‑ID API
 
