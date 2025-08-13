@@ -15,6 +15,21 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = Field(None, alias="ANTHROPIC_API_KEY")
     google_api_key: str | None = Field(None, alias="GOOGLE_API_KEY")
 
+    # Image Generation
+    openai_images_enabled: bool = Field(False, alias="OPENAI_IMAGES_ENABLED")
+    stability_api_key: str | None = Field(None, alias="STABILITY_API_KEY")
+
+    # TTS / Voice
+    elevenlabs_api_key: str | None = Field(None, alias="ELEVENLABS_API_KEY")
+    openai_tts_voice: str = Field("alloy", alias="OPENAI_TTS_VOICE")
+
+    # Talking-Head Video
+    heygen_api_key: str | None = Field(None, alias="HEYGEN_API_KEY")
+    did_api_key: str | None = Field(None, alias="DID_API_KEY")
+
+    # General Video Generation (optional)
+    runway_api_key: str | None = Field(None, alias="RUNWAY_API_KEY")
+
     # Storage / DB / Cache
     database_url: str = Field(..., alias="DATABASE_URL")
     redis_url: str = Field("redis://localhost:6379/0", alias="REDIS_URL")
