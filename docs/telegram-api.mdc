@@ -2,6 +2,8 @@
 alwaysApply: false
 ---
 
+> Брендинг: используем канонический образ персонажа `character/character_bot.png` для аватарки бота и материалов.
+
 Telegram API token:
 <PLACEHOLDER_TELEGRAM_BOT_TOKEN>
 

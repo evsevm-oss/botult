@@ -1,5 +1,7 @@
 ## Выбранный стек (этап 0)
 
+> Визуальные ассеты и аватар генерируются/синхронизируются под референс `character/character_bot.png`.
+
 - Язык/рантайм: Python 3.11+
 - Telegram Bot API: `aiogram` (v3)
 - Внутренние сервисы/REST: `FastAPI` + `uvicorn`
