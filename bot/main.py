@@ -45,7 +45,9 @@ async def main() -> None:
         )
 
     logging.basicConfig(level=settings.log_level)
-    bot = Bot(token=settings.telegram_bot_token)
+    # Частые ошибки: лишние кавычки/пробелы вокруг токена. Подчистим.
+    token = (settings.telegram_bot_token or "").strip().strip("'").strip('"')
+    bot = Bot(token=token)
     dp = Dispatcher()
     dp.include_router(router)
 
