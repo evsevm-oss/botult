@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import hmac
 import hashlib
 from urllib.parse import parse_qsl
@@ -23,6 +24,14 @@ from infra.db.repositories.profile_repo import ProfileRepo
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Ultima Calories API", version="0.1.0")
+    # CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.allowed_origins.split(","),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get("/health")
     def health() -> dict[str, str]:

@@ -7,7 +7,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 from datetime import date
 
-from infra.db.session import get_session
+from infra.db.session import SessionLocal
 from infra.db.repositories.user_repo import UserRepo
 from infra.db.repositories.profile_repo import ProfileRepo
 from infra.api.schemas import ProfileDTO
@@ -75,32 +75,33 @@ async def st_activity(message: Message, state: FSMContext) -> None:
 
 
 @profile_router.message(OnboardStates.goal, F.text.lower().in_({"lose", "maintain", "gain"}))
-async def st_goal(message: Message, state: FSMContext, session: AsyncSession = get_session.__wrapped__()):
+async def st_goal(message: Message, state: FSMContext):
     # Сбор данных
     await state.update_data(goal=message.text.lower())
     data = await state.get_data()
 
     # Создание/получение пользователя и сохранение профиля
-    users = UserRepo(session)
-    profiles = ProfileRepo(session)
-    user_id = await users.get_or_create_by_telegram_id(message.from_user.id)
-    dto = ProfileDTO(
-        sex=data["sex"],
-        birth_date=None,
-        height_cm=data["height_cm"],
-        weight_kg=data["weight_kg"],
-        activity_level=data["activity_level"],
-        goal=data["goal"],
-    )
-    await profiles.upsert_profile(
-        user_id=user_id,
-        sex=dto.sex,
-        birth_date=dto.birth_date,
-        height_cm=dto.height_cm,
-        weight_kg=dto.weight_kg,
-        activity_level=dto.activity_level,
-        goal=dto.goal,
-    )
+    async with SessionLocal() as session:
+        users = UserRepo(session)
+        profiles = ProfileRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(message.from_user.id)
+        dto = ProfileDTO(
+            sex=data["sex"],
+            birth_date=None,
+            height_cm=data["height_cm"],
+            weight_kg=data["weight_kg"],
+            activity_level=data["activity_level"],
+            goal=data["goal"],
+        )
+        await profiles.upsert_profile(
+            user_id=user_id,
+            sex=dto.sex,
+            birth_date=dto.birth_date,
+            height_cm=dto.height_cm,
+            weight_kg=dto.weight_kg,
+            activity_level=dto.activity_level,
+            goal=dto.goal,
+        )
 
     # Расчет бюджетов
     budgets = calculate_budgets(

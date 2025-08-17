@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     s3_secret_access_key: str | None = Field(None, alias="S3_SECRET_ACCESS_KEY")
 
     # CORS / Web
-    allowed_origins: str = Field("http://localhost:3000", alias="ALLOWED_ORIGINS")
+    allowed_origins: str = Field("http://localhost:5173,http://localhost:3000", alias="ALLOWED_ORIGINS")
 
     # Telegram WebApp URL (optional)
     webapp_url: str | None = Field(None, alias="WEBAPP_URL")
