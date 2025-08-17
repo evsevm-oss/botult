@@ -48,6 +48,7 @@ def upgrade() -> None:
         sa.Column("weight_kg", sa.Float(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.UniqueConstraint("user_id", "date"),
+        sa.CheckConstraint("weight_kg > 0", name="ck_weights_positive"),
     )
     op.create_index("ix_weights_user_id", "weights", ["user_id"]) 
     op.create_index("ix_weights_date", "weights", ["date"]) 
@@ -57,11 +58,11 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), primary_key=True),
         sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("type", sa.String(length=16), nullable=False),
+        sa.Column("type", sa.Enum("breakfast", "lunch", "dinner", "snack", name="meal_type"), nullable=False),
         sa.Column("notes", sa.Text(), nullable=True),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
     )
-    op.create_index("ix_meals_user_id", "meals", ["user_id"]) 
-    op.create_index("ix_meals_at", "meals", ["at"]) 
+    op.create_index("ix_meals_user_at", "meals", ["user_id", "at"]) 
 
     op.create_table(
         "meal_items",
@@ -76,6 +77,9 @@ def upgrade() -> None:
         sa.Column("carb_g", sa.Float(), nullable=False),
         sa.Column("source", sa.String(length=16), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.CheckConstraint("amount > 0", name="ck_meal_items_amount_positive"),
+        sa.CheckConstraint("kcal >= 0 AND protein_g >= 0 AND fat_g >= 0 AND carb_g >= 0", name="ck_meal_items_macros_nonneg"),
     )
     op.create_index("ix_meal_items_meal_id", "meal_items", ["meal_id"]) 
 
@@ -178,7 +182,7 @@ def upgrade() -> None:
         "coach_messages",
         sa.Column("id", sa.BigInteger(), primary_key=True),
         sa.Column("session_id", sa.BigInteger(), sa.ForeignKey("coach_sessions.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("role", sa.String(length=16), nullable=False),
+        sa.Column("role", sa.Enum("user", "assistant", "system", name="coach_role"), nullable=False),
         sa.Column("content", postgresql.JSONB(astext_type=sa.Text())),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
     )
@@ -187,7 +191,7 @@ def upgrade() -> None:
     op.create_table(
         "content_templates",
         sa.Column("id", sa.BigInteger(), primary_key=True),
-        sa.Column("kind", sa.String(length=16), nullable=False),
+        sa.Column("kind", sa.Enum("text", "image", "video", name="content_kind"), nullable=False),
         sa.Column("name", sa.String(length=128), nullable=False),
         sa.Column("body", postgresql.JSONB(astext_type=sa.Text())),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),

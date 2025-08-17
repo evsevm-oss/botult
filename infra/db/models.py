@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime, date
+from enum import Enum as PyEnum
 from typing import Optional
 
+import sqlalchemy as sa
 from sqlalchemy import (
     BigInteger,
     String,
@@ -14,6 +16,10 @@ from sqlalchemy import (
     ForeignKey,
     UniqueConstraint,
     text,
+    MetaData,
+    Enum as SAEnum,
+    CheckConstraint,
+    Index,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -28,10 +34,11 @@ NAMING_CONVENTION = {
 }
 
 
+metadata_obj = MetaData(naming_convention=NAMING_CONVENTION)
+
+
 class Base(DeclarativeBase):
-    __abstract__ = True
-    metadata = DeclarativeBase.metadata
-    metadata.naming_convention = NAMING_CONVENTION
+    metadata = metadata_obj
 
 
 class TimestampMixin:
@@ -71,7 +78,10 @@ class Profile(Base, TimestampMixin):
 
 class Weight(Base):
     __tablename__ = "weights"
-    __table_args__ = (UniqueConstraint("user_id", "date"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "date"),
+        CheckConstraint("weight_kg > 0", name="ck_weights_positive"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
@@ -80,14 +90,24 @@ class Weight(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
 
 
+class MealTypeEnum(PyEnum):
+    breakfast = "breakfast"
+    lunch = "lunch"
+    dinner = "dinner"
+    snack = "snack"
+
+
 class Meal(Base):
     __tablename__ = "meals"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-    type: Mapped[str] = mapped_column(String(16))  # breakfast|lunch|dinner|snack
+    type: Mapped[str] = mapped_column(SAEnum(MealTypeEnum, name="meal_type"))
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (Index("ix_meals_user_at", "user_id", "at"),)
 
 
 class MealItem(Base):
@@ -104,6 +124,13 @@ class MealItem(Base):
     carb_g: Mapped[float] = mapped_column(Float)
     source: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)  # manual|vision|llm
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_meal_items_amount_positive"),
+        CheckConstraint("kcal >= 0 AND protein_g >= 0 AND fat_g >= 0 AND carb_g >= 0", name="ck_meal_items_macros_nonneg"),
+        Index("ix_meal_items_meal_id", "meal_id"),
+    )
 
 
 class Image(Base):
@@ -120,6 +147,8 @@ class Image(Base):
     sha256: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
 
+    __table_args__ = (Index("ix_images_user_created", "user_id", "created_at"),)
+
 
 class VisionInference(Base):
     __tablename__ = "vision_inferences"
@@ -131,6 +160,8 @@ class VisionInference(Base):
     response: Mapped[dict] = mapped_column(JSONB)
     confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+    __table_args__ = (Index("ix_vision_inferences_image_created", "image_id", "created_at"),)
 
 
 class LLMInference(Base):
@@ -147,6 +178,8 @@ class LLMInference(Base):
     input_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     output_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+    __table_args__ = (Index("ix_llm_inferences_user_created", "user_id", "created_at"),)
 
 
 class DailySummary(Base):
@@ -165,15 +198,20 @@ class DailySummary(Base):
 
 # Additional tables for full roadmap scope
 
+class GoalTargetTypeEnum(PyEnum):
+    weight = "weight"
+    bodyfat = "bodyfat"
+
+
 class Goal(Base, TimestampMixin):
     __tablename__ = "goals"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    target_type: Mapped[str] = mapped_column(String(16))  # weight|bodyfat
+    target_type: Mapped[str] = mapped_column(SAEnum(GoalTargetTypeEnum, name="goal_target_type"))
     target_value: Mapped[float] = mapped_column(Float)
     pace: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # %/week or kg/week
-    active: Mapped[bool] = mapped_column(sa.Boolean, server_default=sa.text("true"))
+    active: Mapped[bool] = mapped_column(sa.Boolean, server_default=text("true"))
 
 
 class DiaryDay(Base):
@@ -211,16 +249,22 @@ class CoachMessage(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     session_id: Mapped[int] = mapped_column(ForeignKey("coach_sessions.id", ondelete="CASCADE"), index=True)
-    role: Mapped[str] = mapped_column(String(16))  # user|assistant|system
+    role: Mapped[str] = mapped_column(SAEnum(PyEnum("CoachRole", {"user":"user", "assistant":"assistant", "system":"system"}), name="coach_role"))
     content: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+
+
+class ContentKindEnum(PyEnum):
+    text = "text"
+    image = "image"
+    video = "video"
 
 
 class ContentTemplate(Base):
     __tablename__ = "content_templates"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    kind: Mapped[str] = mapped_column(String(16))  # text|image|video
+    kind: Mapped[str] = mapped_column(SAEnum(ContentKindEnum, name="content_kind"))
     name: Mapped[str] = mapped_column(String(128))
     body: Mapped[dict] = mapped_column(JSONB)  # localized payloads with variables
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
