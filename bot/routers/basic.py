@@ -46,3 +46,8 @@ async def on_photo(message: Message) -> None:
     await message.answer("Фото получено. Vision/LLM подключим на следующих этапах.")
 
 
+@basic_router.message(Command("photo"))
+async def cmd_photo(message: Message) -> None:
+    await message.answer("Пришлите фото блюда одним сообщением — я подтвержу получение и позже распознаю.")
+
+
