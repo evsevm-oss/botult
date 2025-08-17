@@ -7,6 +7,7 @@ from aiogram import Bot, Dispatcher
 
 from core.config import settings
 from bot.routers import make_root_router
+from bot.middlewares.logging import LoggingMiddleware
 
 
 async def main() -> None:
@@ -20,6 +21,7 @@ async def main() -> None:
     token = (settings.telegram_bot_token or "").strip().strip("'").strip('"')
     bot = Bot(token=token)
     dp = Dispatcher()
+    dp.update.middleware(LoggingMiddleware())
     dp.include_router(make_root_router())
 
     # Поллинг без вебхуков для простого запуска на VPS
