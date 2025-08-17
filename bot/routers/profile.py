@@ -98,7 +98,7 @@ async def st_goal(message: Message, state: FSMContext):
         user_id = await users.get_or_create_by_telegram_id(message.from_user.id)
         dto = ProfileDTO(
             sex=data["sex"],
-            birth_date=None,
+            birth_date=data.get("birth_date"),
             height_cm=data["height_cm"],
             weight_kg=data["weight_kg"],
             activity_level=data["activity_level"],
