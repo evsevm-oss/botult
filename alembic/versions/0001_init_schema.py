@@ -132,9 +132,110 @@ def upgrade() -> None:
         sa.UniqueConstraint("user_id", "date"),
     )
 
+    # Additional tables from roadmap
+    op.create_table(
+        "goals",
+        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("target_type", sa.String(length=16), nullable=False),
+        sa.Column("target_value", sa.Float(), nullable=False),
+        sa.Column("pace", sa.Float(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+    )
+
+    op.create_table(
+        "diary_days",
+        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("date", sa.Date(), nullable=False),
+        sa.Column("data", postgresql.JSONB(astext_type=sa.Text())),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+        sa.UniqueConstraint("user_id", "date"),
+    )
+    op.create_index("ix_diary_days_user_id", "diary_days", ["user_id"]) 
+    op.create_index("ix_diary_days_date", "diary_days", ["date"]) 
+
+    op.create_table(
+        "user_settings",
+        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("data", postgresql.JSONB(astext_type=sa.Text())),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+        sa.UniqueConstraint("user_id"),
+    )
+
+    op.create_table(
+        "coach_sessions",
+        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("started_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+        sa.Column("meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    )
+    op.create_index("ix_coach_sessions_user_id", "coach_sessions", ["user_id"]) 
+
+    op.create_table(
+        "coach_messages",
+        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column("session_id", sa.BigInteger(), sa.ForeignKey("coach_sessions.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("role", sa.String(length=16), nullable=False),
+        sa.Column("content", postgresql.JSONB(astext_type=sa.Text())),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+    )
+    op.create_index("ix_coach_messages_session_id", "coach_messages", ["session_id"]) 
+
+    op.create_table(
+        "content_templates",
+        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column("kind", sa.String(length=16), nullable=False),
+        sa.Column("name", sa.String(length=128), nullable=False),
+        sa.Column("body", postgresql.JSONB(astext_type=sa.Text())),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+    )
+
+    op.create_table(
+        "content_items",
+        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column("template_id", sa.BigInteger(), sa.ForeignKey("content_templates.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("payload", postgresql.JSONB(astext_type=sa.Text())),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+    )
+
+    op.create_table(
+        "content_deliveries",
+        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column("item_id", sa.BigInteger(), sa.ForeignKey("content_items.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("channel", sa.String(length=16), nullable=False),
+        sa.Column("scheduled_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("sent_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("meta", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    )
+
+    op.create_table(
+        "webapp_sessions",
+        sa.Column("id", sa.BigInteger(), primary_key=True),
+        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("token_hash", sa.String(length=64), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.UniqueConstraint("token_hash"),
+    )
+    op.create_index("ix_webapp_sessions_user_id", "webapp_sessions", ["user_id"]) 
+
 
 def downgrade() -> None:
     for name in (
+        "webapp_sessions",
+        "content_deliveries",
+        "content_items",
+        "content_templates",
+        "coach_messages",
+        "coach_sessions",
+        "user_settings",
+        "diary_days",
+        "goals",
         "daily_summaries",
         "llm_inferences",
         "vision_inferences",
