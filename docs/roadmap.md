@@ -37,9 +37,9 @@
 - [x] Архитектура Telegram Web Apps: фронтенд (React/Vite/Next), верификация `initData`, авторизация и обмен токенами, обмен данными (REST/WebSocket) — см. `docs/webapps-architecture.mdc`
 
 ## Этап 2. Модель данных и хранилища
-- [ ] ER-диаграмма и таблицы: `users`, `profiles`, `goals`, `weights`, `meals`, `meal_items` (снимок нутриентов и порций на момент ввода), `diary_days`, `images`, `vision_inferences`, `llm_inferences`, `daily_summaries`, `user_settings`, `coach_sessions`, `coach_messages`, `content_items`, `content_templates`, `content_deliveries`, `webapp_sessions`
-- [ ] Миграции для стартовой схемы (минимальный поднабор для MVP)
-- [ ] Отказ от справочника продуктов; схема хранения снимка нутриентов в `meal_items` и аудит запросов в `llm_inferences`
+- [x] ER-таблицы (минимум MVP): `users`, `profiles`, `weights`, `meals`, `meal_items`, `images`, `vision_inferences`, `llm_inferences`, `daily_summaries` — см. `infra/db/models.py`
+- [x] Миграции стартовой схемы: `alembic/versions/0001_init_schema.py`
+- [x] Аудит запросов AI: `llm_inferences` и `vision_inferences`; в `meal_items` хранится снимок нутриентов и единиц на момент ввода
 
 ## Этап 3. Базовые доменные расчеты
 - [ ] Реализовать формулы BMR (Mifflin–St Jeor, Katch–McArdle при наличии % жира)
