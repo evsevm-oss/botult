@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from datetime import date
 from pydantic import BaseModel, Field
 
 
@@ -25,5 +26,14 @@ class APIResponse(BaseModel):
     ok: bool = True
     data: dict | None = None
     error: dict | None = None
+
+
+class ProfileDTO(BaseModel):
+    sex: Literal["male", "female"]
+    birth_date: date | None = None
+    height_cm: float
+    weight_kg: float
+    activity_level: Literal["low", "medium", "high"]
+    goal: Literal["lose", "maintain", "gain"]
 
 

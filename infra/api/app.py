@@ -16,7 +16,9 @@ from infra.db.session import get_session
 from infra.db.repositories.daily_summary_repo import DailySummaryRepo
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from .schemas import APIResponse, BudgetsSchema, ProfileInputSchema
+from .schemas import APIResponse, BudgetsSchema, ProfileInputSchema, ProfileDTO
+from infra.db.repositories.user_repo import UserRepo
+from infra.db.repositories.profile_repo import ProfileRepo
 
 
 def create_app() -> FastAPI:
@@ -57,6 +59,36 @@ def create_app() -> FastAPI:
         )
         out = await recalc_and_store_daily_budgets(repo, inp)
         return APIResponse(ok=True, data=BudgetsSchema(**out.__dict__).model_dump())
+
+    @app.get("/api/profile", response_model=APIResponse)
+    async def get_profile(telegram_id: int, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        profiles = ProfileRepo(session)
+        user_id = await users.get_by_telegram_id(telegram_id)
+        if user_id is None:
+            return APIResponse(ok=True, data=None)
+        prof = await profiles.get_by_user_id(user_id)
+        return APIResponse(ok=True, data=prof)
+
+    @app.post("/api/profile", response_model=APIResponse)
+    async def upsert_profile(
+        telegram_id: int,
+        payload: ProfileDTO,
+        session: AsyncSession = Depends(get_session),
+    ) -> APIResponse:
+        users = UserRepo(session)
+        profiles = ProfileRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        await profiles.upsert_profile(
+            user_id=user_id,
+            sex=payload.sex,
+            birth_date=payload.birth_date,
+            height_cm=payload.height_cm,
+            weight_kg=payload.weight_kg,
+            activity_level=payload.activity_level,
+            goal=payload.goal,
+        )
+        return APIResponse(ok=True, data={"user_id": user_id})
 
     @app.post("/api/webapp/verify", response_model=APIResponse)
     def webapp_verify(initData: str) -> APIResponse:
