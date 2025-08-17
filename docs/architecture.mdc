@@ -1,0 +1,56 @@
+## Архитектура системы (Этап 1)
+
+### Слои и компоненты
+- Bot (Telegram, `aiogram`): только адаптеры ввода/вывода, роутеры и маппинг на use‑cases
+- Domain (use‑cases + сущности/DTO/ошибки): чистая бизнес‑логика, не зависит от Telegram/БД/LLM
+- Services (интеграции): клиенты LLM/Vision/Storage/TTS/Video, изолированы интерфейсами
+- Infra (данные): БД (SQLAlchemy), кэш (Redis), очереди, объектное хранилище
+
+Зависимости направлены вниз: Bot → Domain → Services/Infra. Внутри Domain зависимости инвертируются через интерфейсы (порты), реализация в Services/Infra (адаптеры).
+
+### Потоки данных (общее)
+1) Пользователь → Telegram Bot
+2) Bot вызывает соответствующий use‑case в Domain
+3) Use‑case при необходимости обращается к Services (LLM/Vision) и Infra (БД/кэш/хранилище)
+4) Полученные данные нормализуются до DTO Domain и возвращаются в Bot → ответ пользователю
+
+### Диаграмма потоков (высокоуровнево)
+```mermaid
+flowchart LR
+  U[Пользователь] -->|сообщение/фото| B[Bot (aiogram)]
+  B -->|вызов| UC[Use-cases (Domain)]
+  UC -->|чтение/запись| DB[(БД)]
+  UC -->|кэш| R[(Redis)]
+  UC -->|vision/LLM| AI[Services: OpenAI/D-ID]
+  AI --> UC
+  DB --> UC
+  R --> UC
+  UC --> B --> U
+```
+
+### Каркас REST API
+- Приложение FastAPI: `infra/api/app.py` (эндпоинты `/health`, `/api/me/summary`)
+- В следующих этапах: подключение зависимостей (БД/кэш), версионирование, авторизация WebApp токеном
+
+### Технические заготовки
+- БД: `infra/db/session.py` — AsyncSession (SQLAlchemy 2.x, asyncpg)
+- Redis: `infra/cache/redis.py` — клиент для кэша/сессий
+- Логирование: `core/logging.py` — `structlog` JSON‑формат
+
+### Границы модулей
+- `bot/` — минимальные обработчики, формирование запросов к use‑cases, форматирование ответов
+- `domain/` — `entities.py`, `dtos.py`, `errors.py`, `use_cases/…`
+- `services/` — `llm/`, `vision/`, `image/`, `voice/`, `video/` (клиенты провайдеров)
+- `infra/` — `db/`, `cache/`, `storage/` (адаптеры доступа к данным)
+
+### Ключевые use‑cases (MVP)
+- `ParseMealTextUseCase` — парсинг текста и нормализация в `MealDTO`
+- `AnalyzeMealPhotoUseCase` — распознавание блюд по фото (vision + normalizer LLM) → `MealDTO`
+- `CalculateBudgetsUseCase` — BMR/TDEE и дневные лимиты (калории/БЖУ)
+
+### Контракты
+См. `docs/contracts.mdc` — JSON‑форматы DTO, коды ошибок и события.
+
+### Telegram Web Apps (кратко)
+Для сложных форм и графиков: мини‑приложение (React/Next/Vite). Проверка `initData`, обмен короткоживущим токеном по REST с сервером, запросы к API (REST/WS). Детали — `docs/webapps-architecture.mdc`.
+
