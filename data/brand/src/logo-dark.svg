@@ -3,9 +3,22 @@
   <defs>
     <style>
       .bg { fill: #13211e; }
-      .fg { fill: #fefcf6; font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Inter,Arial; font-weight: 700; }
+      .u { fill: #fefcf6; }
+      .glow { filter: url(#glow); }
     </style>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
   <circle class="bg" cx="320" cy="320" r="310" />
-  <text class="fg" x="50%" y="55%" text-anchor="middle" font-size="360">К</text>
+  <!-- Stylized U with glow -->
+  <g class="glow">
+    <rect class="u" x="190" y="150" rx="26" width="48" height="340"/>
+    <rect class="u" x="402" y="150" rx="26" width="48" height="340"/>
+    <rect class="u" x="206" y="420" rx="26" width="228" height="48"/>
+  </g>
 </svg>

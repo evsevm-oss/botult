@@ -5,20 +5,31 @@ import json
 from pathlib import Path
 
 
-LOGO_LIGHT = """
-<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">
+LOGO_TEMPLATE = """
+<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"640\" height=\"640\" viewBox=\"0 0 640 640\">
   <defs>
     <style>
       .bg {{ fill: {bg}; }}
-      .fg {{ fill: {fg}; font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Inter,Arial; font-weight: 700; }}
+      .u {{ fill: {fg}; }}
+      .glow {{ filter: url(#glow); }}
     </style>
+    <filter id=\"glow\" x=\"-50%\" y=\"-50%\" width=\"200%\" height=\"200%\">
+      <feGaussianBlur stdDeviation=\"8\" result=\"coloredBlur\"/>
+      <feMerge>
+        <feMergeNode in=\"coloredBlur\"/>
+        <feMergeNode in=\"SourceGraphic\"/>
+      </feMerge>
+    </filter>
   </defs>
-  <circle class="bg" cx="320" cy="320" r="310" />
-  <text class="fg" x="50%" y="55%" text-anchor="middle" font-size="360">К</text>
+  <circle class=\"bg\" cx=\"320\" cy=\"320\" r=\"310\" />
+  <!-- Stylized U with glow -->
+  <g class=\"glow\">
+    <rect class=\"u\" x=\"190\" y=\"150\" rx=\"26\" width=\"48\" height=\"340\"/>
+    <rect class=\"u\" x=\"402\" y=\"150\" rx=\"26\" width=\"48\" height=\"340\"/>
+    <rect class=\"u\" x=\"206\" y=\"420\" rx=\"26\" width=\"228\" height=\"48\"/>
+  </g>
 </svg>
 """
-
-LOGO_DARK = LOGO_LIGHT  # тот же шаблон, меняются цвета
 
 
 def main() -> None:
@@ -30,8 +41,8 @@ def main() -> None:
     data = json.loads(args.palette.read_text(encoding="utf-8"))
     roles = data["roles"]
 
-    light_svg = LOGO_LIGHT.format(bg=roles["primary"], fg="#FFFFFF")
-    dark_svg = LOGO_DARK.format(bg=roles["neutral_dark"], fg=roles["primary"])
+    light_svg = LOGO_TEMPLATE.format(bg=roles["primary"], fg="#FFFFFF")
+    dark_svg = LOGO_TEMPLATE.format(bg=roles["neutral_dark"], fg=roles["primary"])
 
     out = args.out_dir
     out.mkdir(parents=True, exist_ok=True)
