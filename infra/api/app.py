@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+import hmac
+import hashlib
+from urllib.parse import parse_qsl
 
 from core.config import settings
 from domain.use_cases import (
@@ -55,9 +58,32 @@ def create_app() -> FastAPI:
         out = await recalc_and_store_daily_budgets(repo, inp)
         return APIResponse(ok=True, data=BudgetsSchema(**out.__dict__).model_dump())
 
+    @app.post("/api/webapp/verify", response_model=APIResponse)
+    def webapp_verify(initData: str) -> APIResponse:
+        from core.config import settings as cfg
+        if not cfg.telegram_bot_token:
+            raise HTTPException(status_code=500, detail="Bot token is not configured")
+        if verify_init_data(initData, cfg.telegram_bot_token):
+            return APIResponse(ok=True, data={"valid": True})
+        return APIResponse(ok=False, error={"code": "E_INVALID_INITDATA", "message": "Invalid initData"})
+
     return app
 
 
 app = create_app()
+
+
+def verify_init_data(init_data: str, bot_token: str) -> bool:
+    try:
+        params = dict(parse_qsl(init_data, keep_blank_values=True))
+        hash_value = params.pop("hash", None)
+        if not hash_value:
+            return False
+        data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
+        secret_key = hmac.new("WebAppData".encode(), bot_token.encode(), hashlib.sha256).digest()
+        h = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+        return h == hash_value
+    except Exception:
+        return False
 
 
