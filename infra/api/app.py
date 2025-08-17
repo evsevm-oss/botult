@@ -3,6 +3,8 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from core.config import settings
+from domain.use_cases import CalculateBudgetsInput, calculate_budgets
+from .schemas import APIResponse, BudgetsSchema, ProfileInputSchema
 
 
 def create_app() -> FastAPI:
@@ -12,13 +14,18 @@ def create_app() -> FastAPI:
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/api/me/summary")
-    def me_summary() -> dict:
-        # Заглушка: вернём фиксированные данные
-        return {
-            "ok": True,
-            "data": {"kcal": 2300, "protein_g": 144, "fat_g": 64, "carb_g": 290},
-        }
+    @app.post("/api/budgets", response_model=APIResponse)
+    def budgets(payload: ProfileInputSchema) -> APIResponse:
+        inp = CalculateBudgetsInput(
+            sex=payload.sex,
+            age=payload.age,
+            height_cm=payload.height_cm,
+            weight_kg=payload.weight_kg,
+            activity_level=payload.activity_level,
+            goal=payload.goal,
+        )
+        out = calculate_budgets(inp)
+        return APIResponse(ok=True, data=BudgetsSchema(**out.__dict__).model_dump())
 
     return app
 
