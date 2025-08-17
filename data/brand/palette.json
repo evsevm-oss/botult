@@ -1,0 +1,18 @@
+{
+  "source": "character/character_bot.png",
+  "colors": [
+    "#fefcf6",
+    "#fbfaf4",
+    "#e9e9e4",
+    "#546260",
+    "#273c39",
+    "#13211e"
+  ],
+  "roles": {
+    "primary": "#fefcf6",
+    "accent": "#fbfaf4",
+    "neutral_dark": "#13211e",
+    "white": "#FFFFFF",
+    "black": "#000000"
+  }
+}
