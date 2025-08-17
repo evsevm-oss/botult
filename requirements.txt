@@ -20,6 +20,5 @@ minio>=7.2,<8
 python-multipart>=0.0.9,<1
 tenacity>=8.2,<9
 typing-extensions>=4.8,<5
-cairosvg>=2.7,<3
 
 

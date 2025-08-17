@@ -1,0 +1,22 @@
+## Контракты: DTO/ошибки/события
+
+### DTO (минимум)
+- UserDTO: `id`, `tg_id`, `lang`, `created_at`
+- ProfileDTO: `user_id`, `sex`, `age`, `height_cm`, `weight_kg`, `activity_level`, `goal`
+- MealItemDTO: `name`, `amount`, `unit`, `kcal`, `protein_g`, `fat_g`, `carb_g`, `confidence`
+- MealDTO: `id`, `user_id`, `datetime`, `type`, `items: MealItemDTO[]`, `notes`
+- BudgetsDTO: `kcal`, `protein_g`, `fat_g`, `carb_g`, `source`
+
+### Ошибки (коды)
+- `E_INVALID_INPUT`
+- `E_AI_UNAVAILABLE`
+- `E_STORAGE_UNAVAILABLE`
+- `E_RATE_LIMIT`
+
+### События
+- `meal.created` — после подтверждения приема пищи
+- `profile.updated` — при изменении профиля/веса/цели
+- `budgets.recalculated`
+
+Форматы ответов REST: `{ "ok": true, "data": … } | { "ok": false, "error": { "code": "…", "message": "…" } }`
+
