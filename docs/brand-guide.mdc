@@ -11,6 +11,7 @@
 - Палитра: `data/brand/palette.json` (генерируется скриптом из фото персонажа).
 - Исходники логотипа (SVG): `data/brand/src/logo-light.svg`, `logo-dark.svg`.
 - Экспорты PNG: `data/brand/exports/<light|dark>/logo-640.png|logo-512.png|logo-200.png`.
+ - Аватары бота (лицо персонажа): `data/brand/avatars/avatar-640.png|avatar-512.png|avatar-200.png`.
 
 ### Как обновить палитру и ассеты
 1) Извлечь палитру из изображения персонажа:
@@ -27,8 +28,13 @@ python tools/brand/build_logo_from_palette.py --palette data/brand/palette.json 
 python tools/brand/export_brand_assets.py --src-dir data/brand/src --out-dir data/brand/exports
 ```
 
+4) Сгенерировать аватар Telegram из референса персонажа:
+```bash
+python tools/brand/export_avatar_from_character.py --image character/character_bot.png --out-dir data/brand/avatars
+```
+
 ### Принципы
-- Логотип упрощён: круг + литерный знак «К» (кириллица), чтобы быть узнаваемым и читабельным.
+- Логотип упрощён и стилизован под букву «U» (Ultima), форма «толстых скобок»/подковы вдохновлена символом на груди персонажа.
 - Light: фон = `primary`, текст = белый; Dark: фон = `neutral_dark`, текст = `primary`.
 - Палитра управляется данными, а не «вшита» — повторяемость и автоматизация.
 

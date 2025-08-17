@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 from typing import Iterable
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import re
 
 
@@ -21,44 +21,36 @@ def _extract_colors_from_svg(svg_path: Path) -> tuple[str, str]:
     return bg, fg
 
 
-def _load_font(preferred_size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    # Try common fonts; fallback to PIL default
-    candidate_paths = [
-        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/System/Library/Fonts/SFNS.ttf",
-        "/Library/Fonts/Arial Unicode.ttf",
-        "/Library/Fonts/Arial.ttf",
-        "/Library/Fonts/Helvetica.ttc",
-        "/System/Library/Fonts/Helvetica.ttc",
-    ]
-    for path in candidate_paths:
-        p = Path(path)
-        if p.exists():
-            try:
-                return ImageFont.truetype(str(p), preferred_size)
-            except Exception:
-                continue
-    return ImageFont.load_default()
-
-
-def _draw_logo_png(bg_hex: str, fg_hex: str, size: int, letter: str = "К") -> Image.Image:
+def _draw_logo_png(bg_hex: str, fg_hex: str, size: int) -> Image.Image:
     img = Image.new("RGB", (size, size), color=bg_hex)
     draw = ImageDraw.Draw(img)
     # Circle background with margins
     margin = int(size * 0.03125)  # ~ 20px on 640
     draw.ellipse((margin, margin, size - margin, size - margin), fill=bg_hex)
 
-    # Draw letter
-    font_size = int(size * 0.56)
-    font = _load_font(font_size)
-    # Measure text bounding box
-    bbox = draw.textbbox((0, 0), letter, font=font)
-    w = bbox[2] - bbox[0]
-    h = bbox[3] - bbox[1]
-    x = (size - w) // 2
-    y = (size - h) // 2 - int(size * 0.04)
-    draw.text((x, y), letter, fill=fg_hex, font=font)
+    # Draw geometric "U" (rounded thick shape) inspired by the character's chest mark
+    cx = cy = size // 2
+    u_width = int(size * 0.48)
+    u_height = int(size * 0.55)
+    thickness = max(8, int(size * 0.14))
+    radius = thickness // 2
+
+    top_y = cy - u_height // 2
+    bot_y = cy + u_height // 2
+
+    # Left bar
+    left_x = cx - (u_width // 2 - thickness // 2)
+    left_rect = (left_x - thickness // 2, top_y, left_x + thickness // 2, bot_y - thickness // 2)
+    draw.rounded_rectangle(left_rect, radius=radius, fill=fg_hex)
+
+    # Right bar
+    right_x = cx + (u_width // 2 - thickness // 2)
+    right_rect = (right_x - thickness // 2, top_y, right_x + thickness // 2, bot_y - thickness // 2)
+    draw.rounded_rectangle(right_rect, radius=radius, fill=fg_hex)
+
+    # Bottom bridge
+    bottom_rect = (cx - u_width // 2, bot_y - thickness, cx + u_width // 2, bot_y)
+    draw.rounded_rectangle(bottom_rect, radius=radius, fill=fg_hex)
     return img
 
 
