@@ -1,0 +1,54 @@
+## Операционный гайд: деплой и обновление бота на VPS
+
+### 0) Предварительные условия
+- Linux (Debian 12), systemd, Python 3.11+, venv
+- Бот запускается как systemd‑сервис `ultima-bot` (один poller на токен)
+
+### 1) Быстрый релиз кода
+На локальной машине (macOS):
+```bash
+zip -r -X /tmp/bot.zip . -x '.venv/*' '.git/*' '__pycache__/*' 'node_modules/*'
+scp -o IdentitiesOnly=yes -i ~/.ssh/ovh-vps /tmp/bot.zip debian@<VPS_IP>:/home/debian/
+```
+
+На VPS:
+```bash
+sudo -i
+systemctl stop ultima-bot || true
+mkdir -p /root/calorie-photo-bot
+unzip -oq /home/debian/bot.zip -d /root/calorie-photo-bot
+/root/calorie-photo-bot/.venv/bin/python -m pip install -U pip
+/root/calorie-photo-bot/.venv/bin/python -m pip install -r /root/calorie-photo-bot/requirements.txt
+systemctl restart ultima-bot
+sleep 2
+journalctl -u ultima-bot -n 40 --no-pager
+```
+
+### 2) Проверки релиза
+```bash
+ls -1 /root/calorie-photo-bot/bot/routers
+TOKEN=$(grep ^TELEGRAM_BOT_TOKEN= /root/calorie-photo-bot/.env | cut -d= -f2 | tr -d '"')
+curl -s "https://api.telegram.org/bot${TOKEN}/getMe"
+curl -s "https://api.telegram.org/bot${TOKEN}/getMyCommands"
+```
+
+### 3) Смена токена
+```bash
+sudo -i
+cd /root/calorie-photo-bot
+sed -i 's/^TELEGRAM_BOT_TOKEN=.*/TELEGRAM_BOT_TOKEN=<НОВЫЙ_ТОКЕН>/' .env
+TOKEN=$(grep ^TELEGRAM_BOT_TOKEN= .env | cut -d= -f2 | tr -d '"')
+curl -s "https://api.telegram.org/bot${TOKEN}/getMe"
+systemctl restart ultima-bot
+```
+
+### 4) Типичные ошибки
+- `Conflict: terminated by other getUpdates request`: работает второй poller на том же токене. Остановить все не‑systemd процессы и убедиться, что бот запущен только как `ultima-bot`.
+- `Unauthorized`: неверный токен в `.env`, или `.env` был перезаписан при релизе. Исправить токен и перезапустить сервис.
+- `requirements.txt not found`: команда pip выполнена не из каталога проекта. Указывайте полный путь `/root/calorie-photo-bot/requirements.txt`.
+- Команды бота не видны в Telegram: принудительно выставить `setMyCommands` и перезапустить сервис.
+
+### 5) Один poller по контракту
+- Всегда запускайте бота как systemd‑сервис `ultima-bot`.
+- Не запускайте локально `python -m bot.main` параллельно с сервисом.
+

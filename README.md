@@ -186,3 +186,51 @@ if result_url:
   ```
   Если всё ок, бот ответит на `/start` и `/help`.
 - Для фото‑распознавания блюд/порций будем использовать GPT‑4o (vision) и унифицированный JSON‑формат (этапы 7–9).
+
+## Деплой и обновление на VPS (важно)
+
+Ключевые правила безопасного обновления:
+- На токен Telegram должен работать только ОДИН poller (используйте systemd‑сервис, не запускайте бот локально параллельно).
+- Не перезаписывайте `.env` при обновлении кода.
+- После смены токена: обновите `.env` → перезапустите сервис → проверьте `getMe` и `getMyCommands`.
+
+Краткая инструкция (zip → scp → unzip → restart):
+
+1) На локальной машине (macOS), в корне проекта:
+```bash
+zip -r -X /tmp/bot.zip . -x '.venv/*' '.git/*' '__pycache__/*' 'node_modules/*'
+scp -o IdentitiesOnly=yes -i ~/.ssh/ovh-vps /tmp/bot.zip debian@<VPS_IP>:/home/debian/
+```
+
+2) На VPS:
+```bash
+sudo -i
+systemctl stop ultima-bot || true
+mkdir -p /root/calorie-photo-bot
+unzip -oq /home/debian/bot.zip -d /root/calorie-photo-bot
+/root/calorie-photo-bot/.venv/bin/python -m pip install -U pip
+/root/calorie-photo-bot/.venv/bin/python -m pip install -r /root/calorie-photo-bot/requirements.txt
+systemctl restart ultima-bot
+sleep 2
+journalctl -u ultima-bot -n 40 --no-pager
+```
+
+3) Проверки после релиза:
+```bash
+ls -1 /root/calorie-photo-bot/bot/routers
+TOKEN=$(grep ^TELEGRAM_BOT_TOKEN= /root/calorie-photo-bot/.env | cut -d= -f2 | tr -d '"')
+curl -s "https://api.telegram.org/bot${TOKEN}/getMe"
+curl -s "https://api.telegram.org/bot${TOKEN}/getMyCommands"
+```
+
+4) Смена токена (если нужно):
+```bash
+sudo -i
+cd /root/calorie-photo-bot
+sed -i 's/^TELEGRAM_BOT_TOKEN=.*/TELEGRAM_BOT_TOKEN=<НОВЫЙ_ТОКЕН>/' .env
+TOKEN=$(grep ^TELEGRAM_BOT_TOKEN= .env | cut -d= -f2 | tr -d '"')
+curl -s "https://api.telegram.org/bot${TOKEN}/getMe"
+systemctl restart ultima-bot
+```
+
+Подробнее: см. `docs/ops-deployment.mdc`.

@@ -29,13 +29,19 @@ flowchart LR
 ```
 
 ### Каркас REST API
-- Приложение FastAPI: `infra/api/app.py` (эндпоинты `/health`, `/api/me/summary`)
+- Приложение FastAPI: `infra/api/app.py` (эндпоинты `/health`, `/api/budgets`, `/api/recalculate`)
 - В следующих этапах: подключение зависимостей (БД/кэш), версионирование, авторизация WebApp токеном
 
 ### Технические заготовки
 - БД: `infra/db/session.py` — AsyncSession (SQLAlchemy 2.x, asyncpg)
 - Redis: `infra/cache/redis.py` — клиент для кэша/сессий
 - Логирование: `core/logging.py` — `structlog` JSON‑формат
+
+### Эксплуатация (ops)
+- Один poller на токен Telegram: бот запускается как systemd‑сервис `ultima-bot`
+- Деплой: zip → scp → unzip → `pip install -r` → `systemctl restart ultima-bot`
+- При смене токена: обновить `.env` → проверить `getMe` → перезапустить сервис
+- Проверки: `getMyCommands`, наличие модулей `bot/routers`
 
 ### Границы модулей
 - `bot/` — минимальные обработчики, формирование запросов к use‑cases, форматирование ответов
