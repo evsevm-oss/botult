@@ -40,7 +40,19 @@ export function ProfilePage() {
       body: JSON.stringify(profile),
     })
     setLoading(false)
-    alert('Профиль сохранен')
+    // Fetch budgets preview (client-side calc via API budgets)
+    const ageYears = profile.birth_date ? Math.max(0, new Date().getFullYear() - new Date(profile.birth_date).getFullYear()) : 30
+    const payload = {
+      sex: profile.sex,
+      age: ageYears,
+      height_cm: profile.height_cm,
+      weight_kg: profile.weight_kg,
+      activity_level: profile.activity_level,
+      goal: profile.goal,
+    }
+    const jb = await fetch(`${API_BASE}/api/budgets`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(r => r.json())
+    const b = jb?.data
+    alert(`Профиль сохранен. Дневные бюджеты:\nКалории: ${b?.kcal} ккал\nБелки: ${b?.protein_g} г\nЖиры: ${b?.fat_g} г\nУглеводы: ${b?.carb_g} г`)
   }
 
   return (
@@ -48,6 +60,15 @@ export function ProfilePage() {
       <h2>Профиль</h2>
       {loading && <div>Загрузка...</div>}
       <form onSubmit={onSubmit}>
+        <label>
+          Дата рождения
+          <input
+            type="date"
+            value={profile?.birth_date ?? ''}
+            onChange={(e) => setProfile({ ...(profile || ({} as ProfileDTO)), birth_date: e.target.value })}
+          />
+        </label>
+        <br />
         <label>
           Пол
           <select

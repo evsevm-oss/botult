@@ -5,7 +5,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
-from datetime import date
+from datetime import date, datetime
 
 from infra.db.session import SessionLocal
 from infra.db.repositories.user_repo import UserRepo
@@ -22,7 +22,7 @@ profile_router = Router()
 
 class OnboardStates(StatesGroup):
     sex = State()
-    age = State()
+    birth = State()
     height = State()
     weight = State()
     activity = State()
@@ -38,17 +38,28 @@ async def cmd_profile(message: Message, state: FSMContext) -> None:
 @profile_router.message(OnboardStates.sex, F.text.lower().in_({"male", "female"}))
 async def st_sex(message: Message, state: FSMContext) -> None:
     await state.update_data(sex=message.text.lower())
-    await state.set_state(OnboardStates.age)
-    await message.answer("Возраст (лет):")
+    await state.set_state(OnboardStates.birth)
+    await message.answer("Дата рождения (в формате YYYY-MM-DD или DD.MM.YYYY):")
 
 
-@profile_router.message(OnboardStates.age, F.text.regexp(r"^\d{1,3}$"))
-async def st_age(message: Message, state: FSMContext) -> None:
-    age = int(message.text)
-    if age < 10 or age > 100:
-        await message.answer("Введите возраст от 10 до 100")
+@profile_router.message(OnboardStates.birth)
+async def st_birth(message: Message, state: FSMContext) -> None:
+    txt = (message.text or "").strip()
+    birth: date | None = None
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y"):
+        try:
+            birth = datetime.strptime(txt, fmt).date()
+            break
+        except ValueError:
+            continue
+    if birth is None:
+        await message.answer("Не получилось распознать дату. Введите в формате YYYY-MM-DD или DD.MM.YYYY")
         return
-    await state.update_data(age=age)
+    today = date.today()
+    if birth > today or (today.year - birth.year) < 10 or (today.year - birth.year) > 100:
+        await message.answer("Пожалуйста, введите реальную дату рождения (возраст 10–100 лет)")
+        return
+    await state.update_data(birth_date=birth.isoformat())
     await state.set_state(OnboardStates.height)
     await message.answer("Рост (в сантиметрах):")
 
@@ -104,10 +115,18 @@ async def st_goal(message: Message, state: FSMContext):
         )
 
     # Расчет бюджетов
+    # Возраст считаем из даты рождения на текущую дату
+    def _age_from_birth(b: str) -> int:
+        d = datetime.strptime(b, "%Y-%m-%d").date()
+        today = date.today()
+        years = today.year - d.year - ((today.month, today.day) < (d.month, d.day))
+        return max(0, years)
+
+    age_years = _age_from_birth(data["birth_date"]) if data.get("birth_date") else 30
     budgets = calculate_budgets(
         CalculateBudgetsInput(
             sex=dto.sex,
-            age=data["age"],
+            age=age_years,
             height_cm=dto.height_cm,
             weight_kg=dto.weight_kg,
             activity_level=dto.activity_level,
