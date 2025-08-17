@@ -1,0 +1,34 @@
+## Брендинг: логотип и палитра
+
+Исходная точка: канонический образ персонажа `character/character_bot.png`. От него строим палитру и упрощённый логотип для аватарки Telegram.
+
+### Цели
+- Единая палитра (primary/accent/neutral), light/dark версии.
+- Логотип‑аватар в круге, читаемый на 200–640 px.
+- Экспорт ассетов в `data/brand/` (SVG и PNG 640×640, 512×512, 200×200).
+
+### Где лежит
+- Палитра: `data/brand/palette.json` (генерируется скриптом из фото персонажа).
+- Исходники логотипа (SVG): `data/brand/src/logo-light.svg`, `logo-dark.svg`.
+- Экспорты PNG: `data/brand/exports/<light|dark>/logo-640.png|logo-512.png|logo-200.png`.
+
+### Как обновить палитру и ассеты
+1) Извлечь палитру из изображения персонажа:
+```bash
+source .venv/bin/activate
+python tools/brand/extract_palette.py --image character/character_bot.png --out data/brand/palette.json
+```
+2) Пересобрать SVG логотипов из палитры:
+```bash
+python tools/brand/build_logo_from_palette.py --palette data/brand/palette.json --out-dir data/brand/src
+```
+3) Экспортировать PNG ассеты нужных размеров:
+```bash
+python tools/brand/export_brand_assets.py --src-dir data/brand/src --out-dir data/brand/exports
+```
+
+### Принципы
+- Логотип упрощён: круг + литерный знак «К» (кириллица), чтобы быть узнаваемым и читабельным.
+- Light: фон = `primary`, текст = белый; Dark: фон = `neutral_dark`, текст = `primary`.
+- Палитра управляется данными, а не «вшита» — повторяемость и автоматизация.
+
