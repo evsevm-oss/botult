@@ -50,3 +50,29 @@ class WeightInput(BaseModel):
     weight_kg: float
 
 
+class NormalizedItem(BaseModel):
+    name: str
+    category: str | None = None
+    unit: Literal["g", "ml", "piece"]
+    amount: float
+    kcal: float
+    protein_g: float
+    fat_g: float
+    carb_g: float
+    confidence: float | None = None
+    assumptions: list[str] | None = None
+
+
+class NormalizeInput(BaseModel):
+    text: str = Field(..., min_length=1)
+    locale: Literal["ru", "en"] = "ru"
+    telegram_id: int | None = None
+    allow_ambiguity: bool = False
+
+
+class NormalizeResponse(BaseModel):
+    items: list[NormalizedItem]
+    needs_clarification: bool = False
+    clarifications: list[str] | None = None
+
+

@@ -17,7 +17,17 @@ from infra.db.session import get_session
 from infra.db.repositories.daily_summary_repo import DailySummaryRepo
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from .schemas import APIResponse, BudgetsSchema, ProfileInputSchema, ProfileDTO, GoalDTO, WeightInput
+from .schemas import (
+    APIResponse,
+    BudgetsSchema,
+    ProfileInputSchema,
+    ProfileDTO,
+    GoalDTO,
+    WeightInput,
+    NormalizeInput,
+    NormalizeResponse,
+)
+from domain.use_cases.normalize_text import normalize_text
 from infra.db.repositories.user_repo import UserRepo
 from infra.db.repositories.profile_repo import ProfileRepo
 from infra.db.repositories.goal_repo import GoalRepo
@@ -196,6 +206,12 @@ def create_app() -> FastAPI:
         if verify_init_data(initData, cfg.telegram_bot_token):
             return APIResponse(ok=True, data={"valid": True})
         return APIResponse(ok=False, error={"code": "E_INVALID_INITDATA", "message": "Invalid initData"})
+
+    # Stage 7: normalization endpoint (text based MVP)
+    @app.post("/api/normalize", response_model=NormalizeResponse)
+    def normalize(payload: NormalizeInput) -> NormalizeResponse:
+        out = normalize_text(payload.text)
+        return NormalizeResponse(**out.__dict__)
 
     return app
 
