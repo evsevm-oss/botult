@@ -54,6 +54,15 @@ async def on_meal_text(message: Message, state: FSMContext) -> None:
         else:
             await message.answer("Сервис нормализации временно недоступен")
     await state.clear()
+@meal_router.message(F.text)
+async def on_free_text(message: Message, state: FSMContext) -> None:
+    # Игнорируем команды
+    if (message.text or "").startswith("/"):
+        return
+    # Запуск потока нормализации без команды
+    await state.set_state(AddMealStates.waiting_text)
+    await on_meal_text(message, state)
+
 @meal_router.message(F.voice)
 async def on_voice(message: Message, state: FSMContext) -> None:
     # Download voice file
