@@ -1,0 +1,74 @@
+## Быстрое обновление кода на VPS (OVH Debian)
+
+Эта инструкция — короткая «памятка» для обновления кода после локальных изменений. Предполагается, что сервер уже подготовлен один раз (есть `/root/calorie-photo-bot`, `.env`, настроены systemd‑сервисы `ultima-api.service` и `ultima-bot.service`). Для первичной установки см. `docs/ops-deployment.mdc`.
+
+### 1) На Mac — собрать архив и загрузить на сервер
+
+```bash
+cd "/Users/evgenii/Проекты/Боты/Бот подсчета калорий по фото"
+
+# Собираем архив без .env, .venv и мусора macOS/Node
+zip -r -X ~/calorie-bot.zip . \
+  -x ".git/*" "*/.venv/*" "venv/*" "__pycache__/*" \
+     "node_modules/*" "webapp/node_modules/*" ".DS_Store" ".env"
+
+# Загружаем под пользователем debian (используем ваш ключ)
+scp -o IdentitiesOnly=yes -i ~/.ssh/ovh-vps \
+  ~/calorie-bot.zip debian@57.129.75.190:/home/debian/update.zip
+```
+
+### 2) На VPS — распаковать и применить
+
+```bash
+# Вход на сервер и переход в root
+ssh -o IdentitiesOnly=yes -i ~/.ssh/ovh-vps debian@57.129.75.190
+sudo -i
+
+# Перемещаем архив в каталог проекта и распаковываем
+mkdir -p /root/calorie-photo-bot
+mv /home/debian/update.zip /root/calorie-photo-bot/update.zip
+cd /root/calorie-photo-bot
+unzip -o update.zip | cat
+
+# Обновляем зависимости в виртуальном окружении
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+pip install -r requirements.txt
+
+# Применяем миграции БД
+export PYTHONPATH=/root/calorie-photo-bot
+alembic upgrade head
+
+# Перезапускаем сервисы
+systemctl restart ultima-api.service
+systemctl restart ultima-bot.service
+
+# Быстрые проверки
+curl -s http://127.0.0.1:8000/health | cat
+journalctl -u ultima-bot.service -n 60 --no-pager -o cat
+```
+
+### 3) Если бот не отвечает
+
+```bash
+cd /root/calorie-photo-bot
+set -a; source .env; set +a
+
+# Снять возможный конфликт поллеров и удалить вебхук
+pkill -f "python .*bot/main.py" || true
+[ -n "$TELEGRAM_BOT_TOKEN" ] && \
+  curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/deleteWebhook" | cat
+
+# Проверить валидность токена
+curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getMe" | cat
+
+# Перезапуск
+systemctl restart ultima-bot.service
+journalctl -u ultima-bot.service -n 80 --no-pager -o cat
+```
+
+Примечания:
+- Не включайте `.env` и `.venv` в архив — секреты и бинарники разные для macOS/VPS.
+- Если ошибки подключения к БД — проверьте `DATABASE_URL` в `.env` и что PostgreSQL запущен (`systemctl status postgresql`).
+
