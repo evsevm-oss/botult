@@ -97,6 +97,11 @@ class MealTypeEnum(PyEnum):
     snack = "snack"
 
 
+class MealStatusEnum(PyEnum):
+    draft = "draft"
+    confirmed = "confirmed"
+
+
 class Meal(Base):
     __tablename__ = "meals"
 
@@ -104,10 +109,19 @@ class Meal(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     type: Mapped[str] = mapped_column(SAEnum(MealTypeEnum, name="meal_type"))
+    status: Mapped[str] = mapped_column(SAEnum(MealStatusEnum, name="meal_status"), server_default=text("'draft'"))
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Idempotency / source binding
+    source_chat_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    source_message_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    source_update_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
 
-    __table_args__ = (Index("ix_meals_user_at", "user_id", "at"),)
+    __table_args__ = (
+        Index("ix_meals_user_at", "user_id", "at"),
+        UniqueConstraint("user_id", "source_update_id", name="uq_meals_user_update", deferrable=True, initially="IMMEDIATE"),
+        UniqueConstraint("user_id", "source_chat_id", "source_message_id", name="uq_meals_user_chat_msg", deferrable=True, initially="IMMEDIATE"),
+    )
 
 
 class MealItem(Base):
