@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import List
+import json
+import hashlib
+
+from infra.cache.redis import redis_client
+from services.llm.openai_normalize import normalize_with_openai
 
 
 @dataclass
@@ -84,10 +89,77 @@ def normalize_items(raw: List[RawItem]) -> List[NormalizedItem]:
     return result
 
 
-def normalize_text(text: str) -> NormalizeOutput:
-    raw = parse_text_to_raw_items(text)
-    items = normalize_items(raw)
-    # На реальном этапе добавим GPT для дисамбигуации и уточнений
-    return NormalizeOutput(items=items, needs_clarification=False, clarifications=None)
+def _cache_key(text: str, locale: str) -> str:
+    h = hashlib.sha256(f"{locale}::{text}".encode()).hexdigest()[:24]
+    return f"normalize:{locale}:{h}"
+
+
+async def normalize_text_async(text: str, locale: str = "ru") -> NormalizeOutput:
+    key = _cache_key(text, locale)
+    cached = await redis_client.get(key)
+    if cached:
+        data = json.loads(cached)
+        return NormalizeOutput(
+            items=[
+                NormalizedItem(
+                    name=i["name"],
+                    category=i.get("category"),
+                    unit=i["unit"],
+                    amount=i["amount"],
+                    kcal=i["kcal"],
+                    protein_g=i["protein_g"],
+                    fat_g=i["fat_g"],
+                    carb_g=i["carb_g"],
+                    confidence=i.get("confidence"),
+                    assumptions=i.get("assumptions"),
+                )
+                for i in data["items"]
+            ],
+            needs_clarification=data.get("needs_clarification", False),
+            clarifications=data.get("clarifications"),
+        )
+
+    llm = normalize_with_openai(text, locale=locale)
+    if llm:
+        out = NormalizeOutput(
+            items=[
+                NormalizedItem(
+                    name=i["name"],
+                    category=i.get("category"),
+                    unit=i["unit"],
+                    amount=float(i["amount"]),
+                    kcal=float(i["kcal"]),
+                    protein_g=float(i["protein_g"]),
+                    fat_g=float(i["fat_g"]),
+                    carb_g=float(i["carb_g"]),
+                    confidence=float(i.get("confidence", 0.8)),
+                    assumptions=i.get("assumptions"),
+                )
+                for i in llm["items"]
+            ],
+            needs_clarification=bool(llm.get("needs_clarification", False)),
+            clarifications=llm.get("clarifications"),
+        )
+    else:
+        raw = parse_text_to_raw_items(text)
+        items = normalize_items(raw)
+        out = NormalizeOutput(items=items, needs_clarification=False, clarifications=None)
+
+    try:
+        await redis_client.setex(
+            key,
+            60 * 60 * 12,
+            json.dumps(
+                {
+                    "items": [i.__dict__ for i in out.items],
+                    "needs_clarification": out.needs_clarification,
+                    "clarifications": out.clarifications,
+                }
+            ),
+        )
+    except Exception:
+        pass
+
+    return out
 
 

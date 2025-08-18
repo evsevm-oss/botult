@@ -27,7 +27,7 @@ from .schemas import (
     NormalizeInput,
     NormalizeResponse,
 )
-from domain.use_cases.normalize_text import normalize_text
+from domain.use_cases.normalize_text import normalize_text_async
 from infra.db.repositories.user_repo import UserRepo
 from infra.db.repositories.profile_repo import ProfileRepo
 from infra.db.repositories.goal_repo import GoalRepo
@@ -209,8 +209,8 @@ def create_app() -> FastAPI:
 
     # Stage 7: normalization endpoint (text based MVP)
     @app.post("/api/normalize", response_model=NormalizeResponse)
-    def normalize(payload: NormalizeInput) -> NormalizeResponse:
-        out = normalize_text(payload.text)
+    async def normalize(payload: NormalizeInput) -> NormalizeResponse:
+        out = await normalize_text_async(payload.text, locale=payload.locale)
         return NormalizeResponse(**out.__dict__)
 
     return app

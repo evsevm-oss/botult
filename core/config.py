@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     # AI providers (minimal)
     openai_api_key: str | None = Field(None, alias="OPENAI_API_KEY")
     openai_tts_voice: str = Field("alloy", alias="OPENAI_TTS_VOICE")
+    openai_model_normalize: str = Field("gpt-4o-mini", alias="OPENAI_MODEL_NORMALIZE")
     did_api_key: str | None = Field(None, alias="DID_API_KEY")
 
     # Storage / DB / Cache
