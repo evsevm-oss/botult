@@ -9,6 +9,10 @@ from core.config import settings
 
 from domain.use_cases import CalculateBudgetsInput, calculate_budgets
 from infra.cache.redis import redis_client
+from infra.db.session import get_session
+from infra.db.repositories.image_repo import ImageRepo
+from infra.db.repositories.vision_inference_repo import VisionInferenceRepo
+from infra.db.repositories.meal_repo import MealRepo
 
 
 basic_router = Router()
@@ -69,6 +73,60 @@ async def on_photo(message: Message) -> None:
     except Exception:
         pass
     await message.answer("Фото получено. Поставлено в очередь на распознавание. Сообщу, когда будет готово.")
+
+
+@basic_router.message(F.text.startswith("/checkphoto"))
+async def cmd_check_photo(message: Message) -> None:
+    # Утилита: проверяет последние распознавания и предлагает подтвердить
+    args = (message.text or "").split()
+    if len(args) < 2 or not args[1].isdigit():
+        await message.answer("Использование: /checkphoto <image_id>")
+        return
+    image_id = int(args[1])
+    async with get_session() as session:  # type: ignore
+        vrepo = VisionInferenceRepo(session)
+        inf = await vrepo.get_latest_by_image(image_id=image_id)
+        if not inf:
+            await message.answer("Результат распознавания пока не готов")
+            return
+        resp = inf["response"]
+        items = resp.get("items", [])
+        if not items:
+            await message.answer("Не удалось распознать блюда. Введите вручную /addmeal")
+            return
+        preview = "\n".join(
+            f"• {i['name']} — {int(i.get('amount',0))}{i.get('unit','g')} ≈ {int(i.get('kcal',0))} ккал" for i in items
+        )
+        await message.answer(f"Распознано:\n{preview}\nПодтвердить сохранение? Отправьте /savephoto {image_id}")
+
+
+@basic_router.message(F.text.startswith("/savephoto"))
+async def cmd_save_photo(message: Message) -> None:
+    args = (message.text or "").split()
+    if len(args) < 2 or not args[1].isdigit():
+        await message.answer("Использование: /savephoto <image_id>")
+        return
+    image_id = int(args[1])
+    from datetime import datetime as DT
+    async with get_session() as session:  # type: ignore
+        vrepo = VisionInferenceRepo(session)
+        mrepo = MealRepo(session)
+        inf = await vrepo.get_latest_by_image(image_id=image_id)
+        if not inf:
+            await message.answer("Результат распознавания не найден")
+            return
+        resp = inf["response"]
+        items = resp.get("items", [])
+        meal_id = await mrepo.create_meal(
+            user_id=message.from_user.id,
+            at=DT.utcnow(),
+            meal_type=MealRepo.suggest_meal_type(DT.utcnow()),
+            items=items,
+            notes=f"photo:{image_id}",
+            status="confirmed",
+            autocommit=True,
+        )
+        await message.answer(f"Сохранено как приём {meal_id} ✅")
 
 
 @basic_router.message(Command("photo"))
