@@ -29,6 +29,13 @@ function MealsPage() {
               <li key={it.id}>{it.name}: {Math.round(it.amount)}{it.unit}, {Math.round(it.kcal)} ккал</li>
             ))}
           </ul>
+          <button onClick={async () => {
+            const tg = (window as any).Telegram?.WebApp
+            const user = tg?.initDataUnsafe?.user
+            const telegram_id = user?.id
+            await fetch(`/api/meals/${m.id}?telegram_id=${telegram_id}`, { method: 'DELETE' })
+            location.reload()
+          }}>Удалить</button>
         </div>
       ))}
     </div>

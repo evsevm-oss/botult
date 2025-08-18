@@ -8,6 +8,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 import httpx
 from core.config import settings
 from infra.cache.redis import redis_client
+from services.stt.openai_whisper import transcribe_audio_bytes
 
 
 meal_router = Router()
@@ -16,6 +17,7 @@ meal_router = Router()
 class AddMealStates(StatesGroup):
     waiting_text = State()
     preview = State()
+    waiting_voice = State()
 
 
 @meal_router.message(Command("addmeal"))
@@ -49,6 +51,33 @@ async def on_meal_text(message: Message, state: FSMContext) -> None:
         else:
             await message.answer("Сервис нормализации временно недоступен")
     await state.clear()
+@meal_router.message(F.voice)
+async def on_voice(message: Message, state: FSMContext) -> None:
+    # Download voice file
+    try:
+        file_id = message.voice.file_id
+        from aiogram import Bot
+        bot = message.bot if hasattr(message, 'bot') else None
+        if bot is None:
+            await message.answer("Не удалось получить файл.")
+            return
+        file = await bot.get_file(file_id)
+        url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.get(url)
+            audio_bytes = resp.content
+        text = transcribe_audio_bytes(audio_bytes, filename="voice.ogg", language="ru")
+        if not text:
+            await message.answer("Не удалось распознать речь. Попробуйте ещё раз.")
+            return
+        # Reuse text flow
+        await state.set_state(AddMealStates.waiting_text)
+        fake_message = message
+        fake_message.text = text
+        await on_meal_text(fake_message, state)
+    except Exception:
+        await message.answer("Ошибка распознавания. Попробуйте позже.")
+
 
 @meal_router.callback_query(F.data == "meal_save")
 async def cb_meal_save(call: CallbackQuery, state: FSMContext) -> None:

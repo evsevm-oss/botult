@@ -98,6 +98,7 @@ async def normalize_text_async(text: str, locale: str = "ru") -> NormalizeOutput
     key = _cache_key(text, locale)
     cached = await redis_client.get(key)
     if cached:
+        await redis_client.incr("metrics:normalize:cache_hit")
         data = json.loads(cached)
         return NormalizeOutput(
             items=[
@@ -119,6 +120,7 @@ async def normalize_text_async(text: str, locale: str = "ru") -> NormalizeOutput
             clarifications=data.get("clarifications"),
         )
 
+    await redis_client.incr("metrics:normalize:cache_miss")
     llm = normalize_with_openai(text, locale=locale)
     if llm:
         out = NormalizeOutput(
