@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 from pydantic import BaseModel, Field
 
@@ -90,6 +90,13 @@ class MealCreate(BaseModel):
     at: datetime
     type: Literal["breakfast", "lunch", "dinner", "snack"]
     items: list[MealItemIn]
+    notes: str | None = None
+
+
+class MealUpdate(BaseModel):
+    at: datetime | None = None
+    type: Literal["breakfast", "lunch", "dinner", "snack"] | None = None
+    items: list[MealItemIn] | None = None
     notes: str | None = None
 
 

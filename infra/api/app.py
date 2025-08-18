@@ -26,6 +26,8 @@ from .schemas import (
     WeightInput,
     NormalizeInput,
     NormalizeResponse,
+    MealCreate,
+    MealUpdate,
 )
 from domain.use_cases.normalize_text import normalize_text_async
 from infra.db.repositories.meal_repo import MealRepo
@@ -235,6 +237,30 @@ def create_app() -> FastAPI:
             user_id=user_id, on_date=d, kcal=kcal, protein_g=protein, fat_g=fat, carb_g=carb
         )
         return APIResponse(ok=True, data={"id": meal_id})
+
+    @app.patch("/api/meals/{meal_id}", response_model=APIResponse)
+    async def update_meal(meal_id: int, telegram_id: int, payload: MealUpdate, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        from datetime import datetime as DT
+        users = UserRepo(session)
+        repo = MealRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        await repo.delete_meal(meal_id=meal_id, user_id=user_id)
+        new_id = await repo.create_meal(
+            user_id=user_id,
+            at=payload.at or DT.utcnow(),
+            meal_type=(payload.type or MealRepo.suggest_meal_type(DT.utcnow())),
+            items=[i.model_dump() for i in (payload.items or [])],
+            notes=payload.notes,
+        )
+        return APIResponse(ok=True, data={"id": new_id})
+
+    @app.delete("/api/meals/{meal_id}", response_model=APIResponse)
+    async def delete_meal(meal_id: int, telegram_id: int, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        repo = MealRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        await repo.delete_meal(meal_id=meal_id, user_id=user_id)
+        return APIResponse(ok=True, data={"deleted": True})
 
     @app.post("/api/webapp/verify", response_model=APIResponse)
     def webapp_verify(initData: str) -> APIResponse:
