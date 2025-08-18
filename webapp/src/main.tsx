@@ -34,6 +34,21 @@ function MealsPage() {
       {items.map((m, idx) => (
         <div key={idx} style={{padding:8,border:'1px solid #333',marginBottom:8}}>
           <div>{new Date(m.at).toLocaleTimeString()} — {m.type} ({m.status})</div>
+          <div>
+            <label>Тип приёма: 
+              <select defaultValue={m.type} onChange={async (e)=>{
+                const tg = (window as any).Telegram?.WebApp
+                const user = tg?.initDataUnsafe?.user
+                const telegram_id = user?.id
+                await fetch(`/api/meals/${m.id}?telegram_id=${telegram_id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: e.target.value }) })
+              }}>
+                <option value="breakfast">breakfast</option>
+                <option value="lunch">lunch</option>
+                <option value="dinner">dinner</option>
+                <option value="snack">snack</option>
+              </select>
+            </label>
+          </div>
           <ul>
             {m.items.map((it:any) => (
               <li key={it.id}>{it.name}: {Math.round(it.amount)}{it.unit}, {Math.round(it.kcal)} ккал</li>

@@ -90,7 +90,7 @@ async def cb_meal_save(call: CallbackQuery, state: FSMContext) -> None:
         await call.message.edit_text("Нечего сохранять.")
         return
     from datetime import datetime as DT
-    async with httpx.AsyncClient(base_url=settings.api_base_url, timeout=10.0) as client:
+    async with httpx.AsyncClient(base_url=settings.api_base_url, timeout=10.0, headers={"X-Trace-Id": (await state.get_data()).get("trace_id", "")}) as client:
         r = await client.post(
             "/api/meals",
             params={"telegram_id": call.from_user.id},

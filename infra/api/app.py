@@ -373,7 +373,7 @@ def create_app() -> FastAPI:
         return APIResponse(ok=True, data={"updated": True, "warnings": warnings or None})
 
     @app.delete("/api/meals/{meal_id}", response_model=APIResponse)
-    async def delete_meal(meal_id: int, telegram_id: int, session: AsyncSession = Depends(get_session)) -> APIResponse:
+    async def delete_meal(meal_id: int, telegram_id: int, request: Request, session: AsyncSession = Depends(get_session)) -> APIResponse:
         users = UserRepo(session)
         repo = MealRepo(session)
         user_id = await users.get_or_create_by_telegram_id(telegram_id)
@@ -388,6 +388,10 @@ def create_app() -> FastAPI:
                 user_id=user_id, on_date=d, kcal=sums["kcal"], protein_g=sums["protein_g"], fat_g=sums["fat_g"], carb_g=sums["carb_g"], autocommit=False
             )
         await session.commit()
+        # log trace
+        xtrace = request.headers.get("X-Trace-Id")
+        if xtrace:
+            log.bind(trace_id=xtrace).info("meal_deleted", meal_id=meal_id)
         try:
             await redis_client.incr("metrics:meals:delete")
         except Exception:
