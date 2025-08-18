@@ -4,7 +4,7 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 import httpx
 from core.config import settings
 
@@ -14,6 +14,7 @@ meal_router = Router()
 
 class AddMealStates(StatesGroup):
     waiting_text = State()
+    preview = State()
 
 
 @meal_router.message(Command("addmeal"))
@@ -37,9 +38,54 @@ async def on_meal_text(message: Message, state: FSMContext) -> None:
                     f"• {i['name']} — {int(i['amount'])}{i['unit']} ≈ {int(i['kcal'])} ккал"
                     for i in items
                 )
-                await message.answer(f"Предварительная нормализация:\n{preview}\n(подтверждение и сохранение — на следующем этапе)")
+                kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Сохранить", callback_data="meal_save"), InlineKeyboardButton(text="Отменить", callback_data="meal_cancel")], [InlineKeyboardButton(text="Править", callback_data="meal_edit")]])
+                await state.set_data({"items": items, "text": text})
+                await state.set_state(AddMealStates.preview)
+                await message.answer(f"Предварительная нормализация:\n{preview}", reply_markup=kb)
         else:
             await message.answer("Сервис нормализации временно недоступен")
     await state.clear()
+
+@meal_router.callback_query(F.data == "meal_save")
+async def cb_meal_save(call: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    items = data.get("items", [])
+    if not items:
+        await call.message.edit_text("Нечего сохранять.")
+        return
+    from datetime import datetime as DT
+    async with httpx.AsyncClient(base_url=settings.api_base_url, timeout=10.0) as client:
+        r = await client.post(
+            "/api/meals",
+            params={"telegram_id": call.from_user.id},
+            json={
+                "at": DT.utcnow().isoformat(),
+                "type": "snack",
+                "status": "confirmed",
+                "items": items,
+                "notes": data.get("text"),
+                "source_chat_id": call.message.chat.id,
+                "source_message_id": call.message.message_id,
+                "source_update_id": call.id if call.id and call.id.isdigit() else None,
+            },
+        )
+        if r.status_code == 200:
+            await call.message.edit_text("Сохранено ✅")
+        else:
+            await call.message.edit_text("Не удалось сохранить приём. Попробуйте позже.")
+    await state.clear()
+
+
+@meal_router.callback_query(F.data == "meal_cancel")
+async def cb_meal_cancel(call: CallbackQuery, state: FSMContext) -> None:
+    await call.message.edit_text("Отменено.")
+    await state.clear()
+
+
+@meal_router.callback_query(F.data == "meal_edit")
+async def cb_meal_edit(call: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    await call.message.edit_text("Пришлите исправленный текст приема пищи одним сообщением.")
+    await state.set_state(AddMealStates.waiting_text)
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
 import httpx
 from core.config import settings
@@ -46,8 +46,8 @@ async def cmd_budget(message: Message) -> None:
 
 @basic_router.message(F.photo)
 async def on_photo(message: Message) -> None:
-    # Черновик приема: пока просто подтверждаем получение и подсказываем, что распознавание будет выполнено позже
-    await message.answer("Фото получено. Создан черновик приема. Распознавание будет выполнено на этапе 9.")
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Сохранить", callback_data="meal_confirm"), InlineKeyboardButton(text="Отменить", callback_data="meal_cancel")]])
+    await message.answer("Фото получено. Создан черновик приема. Распознавание будет выполнено на этапе 9.", reply_markup=kb)
 
 
 @basic_router.message(Command("photo"))
@@ -57,7 +57,7 @@ async def cmd_photo(message: Message) -> None:
 
 @basic_router.message(F.voice | F.audio)
 async def on_audio(message: Message) -> None:
-    # MVP: подсказка о голосовом вводе
-    await message.answer("Голосовое сообщение получено. Распознавание речи будет добавлено в рамках этапа 8.")
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Сохранить", callback_data="meal_confirm"), InlineKeyboardButton(text="Отменить", callback_data="meal_cancel")]])
+    await message.answer("Голосовое сообщение получено. Распознавание речи будет добавлено в рамках этапа 8.", reply_markup=kb)
 
 

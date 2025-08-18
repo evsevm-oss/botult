@@ -54,11 +54,11 @@ class NormalizedItem(BaseModel):
     name: str
     category: str | None = None
     unit: Literal["g", "ml", "piece"]
-    amount: float
-    kcal: float
-    protein_g: float
-    fat_g: float
-    carb_g: float
+    amount: float = Field(..., gt=0)
+    kcal: float = Field(..., ge=0)
+    protein_g: float = Field(..., ge=0)
+    fat_g: float = Field(..., ge=0)
+    carb_g: float = Field(..., ge=0)
     confidence: float | None = None
     assumptions: list[str] | None = None
 
@@ -79,11 +79,11 @@ class NormalizeResponse(BaseModel):
 class MealItemIn(BaseModel):
     name: str
     unit: Literal["g", "ml", "piece"]
-    amount: float
-    kcal: float
-    protein_g: float
-    fat_g: float
-    carb_g: float
+    amount: float = Field(..., gt=0)
+    kcal: float = Field(..., ge=0)
+    protein_g: float = Field(..., ge=0)
+    fat_g: float = Field(..., ge=0)
+    carb_g: float = Field(..., ge=0)
 
 
 class MealCreate(BaseModel):
@@ -91,6 +91,10 @@ class MealCreate(BaseModel):
     type: Literal["breakfast", "lunch", "dinner", "snack"]
     items: list[MealItemIn]
     notes: str | None = None
+    status: Literal["draft", "confirmed"] | None = None
+    source_chat_id: int | None = None
+    source_message_id: int | None = None
+    source_update_id: int | None = None
 
 
 class MealUpdate(BaseModel):
@@ -98,5 +102,15 @@ class MealUpdate(BaseModel):
     type: Literal["breakfast", "lunch", "dinner", "snack"] | None = None
     items: list[MealItemIn] | None = None
     notes: str | None = None
+    status: Literal["draft", "confirmed"] | None = None
+
+
+class MealOutput(BaseModel):
+    id: int
+    at: datetime
+    type: Literal["breakfast", "lunch", "dinner", "snack"]
+    status: Literal["draft", "confirmed"]
+    notes: str | None = None
+    items: list[MealItemIn]
 
 

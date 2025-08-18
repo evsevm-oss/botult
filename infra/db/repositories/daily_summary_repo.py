@@ -22,6 +22,7 @@ class DailySummaryRepo:
         protein_g: float,
         fat_g: float,
         carb_g: float,
+        autocommit: bool = True,
     ) -> None:
         stmt = pg_insert(DailySummary).values(
             user_id=user_id,
@@ -36,7 +37,8 @@ class DailySummaryRepo:
             set_(dict(kcal=kcal, protein_g=protein_g, fat_g=fat_g, carb_g=carb_g)),
         )
         await self.session.execute(stmt)
-        await self.session.commit()
+        if autocommit:
+            await self.session.commit()
 
     async def get_by_user_date(self, *, user_id: int, on_date: Date) -> dict | None:
         from infra.db.models import DailySummary

@@ -28,6 +28,7 @@ from .schemas import (
     NormalizeResponse,
     MealCreate,
     MealUpdate,
+    MealOutput,
 )
 from domain.use_cases.normalize_text import normalize_text_async
 from infra.db.repositories.meal_repo import MealRepo
@@ -217,26 +218,38 @@ def create_app() -> FastAPI:
         users = UserRepo(session)
         repo = MealRepo(session)
         user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        # transactional create + summary recompute
+        # transactional section below uses autocommit=False and explicit session.commit()
+        from datetime import date as D
+        d = D.fromisoformat(payload.at.date().isoformat())
         meal_id = await repo.create_meal(
             user_id=user_id,
             at=payload.at,
             meal_type=payload.type,
             items=[i.model_dump() for i in payload.items],
             notes=payload.notes,
+            status=payload.status or "draft",
+            source_chat_id=payload.source_chat_id,
+            source_message_id=payload.source_message_id,
+            source_update_id=payload.source_update_id,
+            autocommit=False,
         )
-        # update summary
-        from datetime import date as D
-        d = D.fromisoformat(payload.at.date().isoformat())
-        meals = await repo.list_by_date(user_id=user_id, on_date=d)
-        # recompute day from items sum
-        kcal = sum(x["kcal"] for m in meals for x in m["items"])
-        protein = sum(x["protein_g"] for m in meals for x in m["items"])
-        fat = sum(x["fat_g"] for m in meals for x in m["items"])
-        carb = sum(x["carb_g"] for m in meals for x in m["items"])
+        sums = await repo.sum_macros_for_date(user_id=user_id, on_date=d)
         await DailySummaryRepo(session).upsert_daily_summary(
-            user_id=user_id, on_date=d, kcal=kcal, protein_g=protein, fat_g=fat, carb_g=carb
+            user_id=user_id, on_date=d, kcal=sums["kcal"], protein_g=sums["protein_g"], fat_g=sums["fat_g"], carb_g=sums["carb_g"], autocommit=False
         )
+        await session.commit()
         return APIResponse(ok=True, data={"id": meal_id})
+
+    @app.get("/api/meals/{meal_id}", response_model=APIResponse)
+    async def get_meal(meal_id: int, telegram_id: int, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        repo = MealRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        meal = await repo.get_by_id(meal_id=meal_id, user_id=user_id)
+        if not meal:
+            raise HTTPException(status_code=404, detail="Meal not found")
+        return APIResponse(ok=True, data=meal)
 
     @app.patch("/api/meals/{meal_id}", response_model=APIResponse)
     async def update_meal(meal_id: int, telegram_id: int, payload: MealUpdate, session: AsyncSession = Depends(get_session)) -> APIResponse:
@@ -244,22 +257,42 @@ def create_app() -> FastAPI:
         users = UserRepo(session)
         repo = MealRepo(session)
         user_id = await users.get_or_create_by_telegram_id(telegram_id)
-        await repo.delete_meal(meal_id=meal_id, user_id=user_id)
-        new_id = await repo.create_meal(
+        # transactional update + summary recompute
+        from datetime import date as D
+        d = D.fromisoformat((payload.at or DT.utcnow()).date().isoformat())
+        await repo.update_meal(
+            meal_id=meal_id,
             user_id=user_id,
-            at=payload.at or DT.utcnow(),
-            meal_type=(payload.type or MealRepo.suggest_meal_type(DT.utcnow())),
-            items=[i.model_dump() for i in (payload.items or [])],
+            at=payload.at,
+            meal_type=payload.type,
+            status=payload.status,
+            items=[i.model_dump() for i in payload.items] if payload.items is not None else None,
             notes=payload.notes,
+            autocommit=False,
         )
-        return APIResponse(ok=True, data={"id": new_id})
+        sums = await repo.sum_macros_for_date(user_id=user_id, on_date=d)
+        await DailySummaryRepo(session).upsert_daily_summary(
+            user_id=user_id, on_date=d, kcal=sums["kcal"], protein_g=sums["protein_g"], fat_g=sums["fat_g"], carb_g=sums["carb_g"], autocommit=False
+        )
+        await session.commit()
+        return APIResponse(ok=True, data={"updated": True})
 
     @app.delete("/api/meals/{meal_id}", response_model=APIResponse)
     async def delete_meal(meal_id: int, telegram_id: int, session: AsyncSession = Depends(get_session)) -> APIResponse:
         users = UserRepo(session)
         repo = MealRepo(session)
         user_id = await users.get_or_create_by_telegram_id(telegram_id)
-        await repo.delete_meal(meal_id=meal_id, user_id=user_id)
+        from datetime import date as D
+        # get date before delete to recompute
+        m = await repo.get_by_id(meal_id=meal_id, user_id=user_id)
+        await repo.delete_meal(meal_id=meal_id, user_id=user_id, autocommit=False)
+        if m:
+            d = D.fromisoformat(m["at"][:10])
+            sums = await repo.sum_macros_for_date(user_id=user_id, on_date=d)
+            await DailySummaryRepo(session).upsert_daily_summary(
+                user_id=user_id, on_date=d, kcal=sums["kcal"], protein_g=sums["protein_g"], fat_g=sums["fat_g"], carb_g=sums["carb_g"], autocommit=False
+            )
+        await session.commit()
         return APIResponse(ok=True, data={"deleted": True})
 
     @app.post("/api/webapp/verify", response_model=APIResponse)
