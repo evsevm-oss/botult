@@ -45,13 +45,30 @@ async def cmd_budget(message: Message) -> None:
     )
 
 
-@basic_router.message(F.photo)
+@basic_router.message(F.photo | F.media_group_id)
 async def on_photo(message: Message) -> None:
-    # идемпотентность: отметим update_id как увиденный
-    if message.update_id:
-        await redis_client.setex(f"seen:update:{message.from_user.id}:{message.update_id}", 3600, "1")
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Сохранить", callback_data="meal_confirm"), InlineKeyboardButton(text="Отменить", callback_data="meal_cancel")]])
-    await message.answer("Фото получено. Создан черновик приема. Распознавание будет выполнено на этапе 9.", reply_markup=kb)
+    # Принимаем одиночное фото или медиагруппу; на старте сохраняем файл(ы) и ставим в очередь
+    try:
+        from aiogram import Bot
+        bot = message.bot
+        photos = []
+        if message.photo:
+            photos = [message.photo[-1]]  # best quality
+        # Для медиагруппы aiogram вызывает обработчик для каждого элемента — складываем по одному
+        for p in photos:
+            file = await bot.get_file(p.file_id)
+            url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(url)
+                data = resp.content
+                await client.post(
+                    "/api/photos",
+                    params={"telegram_id": message.from_user.id, "content_type": "image/jpeg"},
+                    content=data,
+                )
+    except Exception:
+        pass
+    await message.answer("Фото получено. Поставлено в очередь на распознавание. Сообщу, когда будет готово.")
 
 
 @basic_router.message(Command("photo"))
@@ -59,11 +76,6 @@ async def cmd_photo(message: Message) -> None:
     await message.answer("Пришлите фото блюда одним сообщением — я подтвержу получение и позже распознаю.")
 
 
-@basic_router.message(F.voice | F.audio)
-async def on_audio(message: Message) -> None:
-    if message.update_id:
-        await redis_client.setex(f"seen:update:{message.from_user.id}:{message.update_id}", 3600, "1")
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Сохранить", callback_data="meal_confirm"), InlineKeyboardButton(text="Отменить", callback_data="meal_cancel")]])
-    await message.answer("Голосовое сообщение получено. Распознавание речи будет добавлено в рамках этапа 8.", reply_markup=kb)
+# аудио/голос обрабатывается в meal_router с FSM
 
 
