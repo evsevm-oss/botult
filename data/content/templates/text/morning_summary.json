@@ -1,0 +1,19 @@
+{
+  "id": "text.morning_summary.v1",
+  "locale": "ru",
+  "audience": ["all"],
+  "triggers": ["08:00"],
+  "variables": ["user_name", "kcal_target", "protein_g", "fat_g", "carb_g"],
+  "variants": [
+    {
+      "persona": "Ultima",
+      "text": "{{user_name}}, доброе утро! Я — Ultima. Твоя цель на сегодня: ≈{{kcal_target}} ккал (Б {{protein_g}} г, Ж {{fat_g}} г, У {{carb_g}} г). Совет: распредели белок равномерно на 3–5 приёмов."
+    },
+    {
+      "persona": "Ultima",
+      "text": "Стартуем день! План на сегодня — {{kcal_target}} ккал. Держим курс, а если будет голодно — добавь объёма за счёт овощей и белка."
+    }
+  ]
+}
+
+

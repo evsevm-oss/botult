@@ -1,0 +1,15 @@
+{
+  "id": "text.ramadan_fasting.v1",
+  "locale": "ru",
+  "audience": ["ramadan"],
+  "triggers": ["pre_suhoor", "pre_iftar"],
+  "variables": ["kcal_target", "protein_g"],
+  "variants": [
+    {
+      "persona": "Ultima",
+      "text": "Пост (Рамадан): делим рацион на сухур и ифтар. Научно‑практично: достаточный белок ({{protein_g}} г/сут), овощи и цельнозерновые, умерить жареное/сладкое. Пей воду между приёмами."
+    }
+  ]
+}
+
+
