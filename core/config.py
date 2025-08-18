@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # Telegram WebApp URL (optional)
     webapp_url: str | None = Field(None, alias="WEBAPP_URL")
 
+    # Internal API base for bot to call FastAPI
+    api_base_url: str = Field("http://127.0.0.1:8000", alias="API_BASE")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
