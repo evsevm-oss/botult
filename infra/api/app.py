@@ -38,6 +38,7 @@ from infra.db.repositories.profile_repo import ProfileRepo
 from infra.db.repositories.goal_repo import GoalRepo
 from infra.db.repositories.weight_repo import WeightRepo
 from infra.db.repositories.user_settings_repo import UserSettingsRepo
+from infra.cache.redis import redis_client
 
 
 def create_app() -> FastAPI:
@@ -270,7 +271,37 @@ def create_app() -> FastAPI:
             user_id=user_id, on_date=d, kcal=sums["kcal"], protein_g=sums["protein_g"], fat_g=sums["fat_g"], carb_g=sums["carb_g"], autocommit=False
         )
         await session.commit()
-        return APIResponse(ok=True, data={"id": meal_id})
+        # metrics
+        try:
+            await redis_client.incr("metrics:meals:create")
+            await redis_client.incr("metrics:meals:total")
+            if (payload.status or "draft") == "confirmed":
+                await redis_client.incr("metrics:meals:confirmed")
+        except Exception:
+            pass
+        # warnings based on user settings
+        warnings: list[str] = []
+        try:
+            prefs = await UserSettingsRepo(session).get(user_id) or {}
+            if prefs:
+                lower_items = " ".join([i.model_dump()["name"].lower() for i in payload.items])
+                for allergen in (prefs.get("allergies") or []):
+                    if isinstance(allergen, str) and allergen.lower() in lower_items:
+                        warnings.append(f"Предупреждение: найден аллерген — {allergen}")
+                diet = prefs.get("diet_mode")
+                if diet in {"vegan", "vegetarian", "keto", "low_fat"}:
+                    # очень грубые эвристики
+                    banned = {
+                        "vegan": ["молоко", "сыр", "яйц", "мяс", "рыб"],
+                        "vegetarian": ["мяс", "рыб"],
+                        "keto": ["сахар", "слад", "хлеб", "круп", "рис", "макарон"],
+                        "low_fat": ["масло", "жир", "сливк"],
+                    }[diet]
+                    if any(b in lower_items for b in banned):
+                        warnings.append("Блюдо может противоречить выбранному режиму питания")
+        except Exception:
+            pass
+        return APIResponse(ok=True, data={"id": meal_id, "warnings": warnings or None})
 
     @app.get("/api/meals/{meal_id}", response_model=APIResponse)
     async def get_meal(meal_id: int, telegram_id: int, session: AsyncSession = Depends(get_session)) -> APIResponse:
@@ -313,7 +344,27 @@ def create_app() -> FastAPI:
             user_id=user_id, on_date=d, kcal=sums["kcal"], protein_g=sums["protein_g"], fat_g=sums["fat_g"], carb_g=sums["carb_g"], autocommit=False
         )
         await session.commit()
-        return APIResponse(ok=True, data={"updated": True})
+        # metrics
+        try:
+            await redis_client.incr("metrics:meals:update")
+            # confirm ratio if became confirmed
+            after = await repo.get_by_id(meal_id=meal_id, user_id=user_id)
+            if after and after.get("status") == "confirmed":
+                await redis_client.incr("metrics:meals:confirmed")
+        except Exception:
+            pass
+        # warnings
+        warnings: list[str] = []
+        try:
+            prefs = await UserSettingsRepo(session).get(user_id) or {}
+            if prefs and payload.items:
+                lower_items = " ".join([i.model_dump()["name"].lower() for i in payload.items])
+                for allergen in (prefs.get("allergies") or []):
+                    if isinstance(allergen, str) and allergen.lower() in lower_items:
+                        warnings.append(f"Предупреждение: найден аллерген — {allergen}")
+        except Exception:
+            pass
+        return APIResponse(ok=True, data={"updated": True, "warnings": warnings or None})
 
     @app.delete("/api/meals/{meal_id}", response_model=APIResponse)
     async def delete_meal(meal_id: int, telegram_id: int, session: AsyncSession = Depends(get_session)) -> APIResponse:
@@ -331,6 +382,10 @@ def create_app() -> FastAPI:
                 user_id=user_id, on_date=d, kcal=sums["kcal"], protein_g=sums["protein_g"], fat_g=sums["fat_g"], carb_g=sums["carb_g"], autocommit=False
             )
         await session.commit()
+        try:
+            await redis_client.incr("metrics:meals:delete")
+        except Exception:
+            pass
         return APIResponse(ok=True, data={"deleted": True})
 
     @app.post("/api/webapp/verify", response_model=APIResponse)
