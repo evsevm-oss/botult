@@ -43,6 +43,9 @@ from infra.db.repositories.weight_repo import WeightRepo
 from infra.db.repositories.user_settings_repo import UserSettingsRepo
 from infra.cache.redis import redis_client
 from services.vision.photo_pipeline import save_photo, PhotoIn
+from services.vision.processing import preprocess_photo
+from services.vision.queue import enqueue as enqueue_vision, VisionTask, get_status as get_vision_status
+from infra.db.repositories.image_repo import ImageRepo
 
 
 def create_app() -> FastAPI:
@@ -454,12 +457,30 @@ def create_app() -> FastAPI:
 
     # Stage 9: receive photo (raw MVP), store to object storage and index
     @app.post("/api/photos", response_model=APIResponse)
-    async def upload_photo(telegram_id: int, content_type: str, data: bytes) -> APIResponse:
-        users = UserRepo(None)  # not DB-bound for simple lookup; could refactor DI
-        # In real app we would use session; here stick to minimal signature
-        # store file
-        res = save_photo(telegram_id, PhotoIn(bytes=data, content_type=content_type))
-        return APIResponse(ok=True, data={"object_key": res.object_key, "sha256": res.sha256})
+    async def upload_photo(telegram_id: int, content_type: str, data: bytes, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        # preprocess
+        processed = preprocess_photo(data, content_type)
+        res = save_photo(user_id, PhotoIn(bytes=processed.bytes, content_type=processed.content_type, width=processed.width, height=processed.height))
+        # index in DB
+        img_repo = ImageRepo(session)
+        image_id = await img_repo.create_or_get(
+            user_id=user_id,
+            object_key=res.object_key,
+            sha256=res.sha256,
+            width=processed.width,
+            height=processed.height,
+            content_type=processed.content_type,
+        )
+        # enqueue vision task
+        await enqueue_vision(VisionTask(image_id=image_id, user_id=user_id))
+        return APIResponse(ok=True, data={"image_id": image_id, "object_key": res.object_key, "sha256": res.sha256, "status": "queued"})
+
+    @app.get("/api/photos/{image_id}/status", response_model=APIResponse)
+    async def photo_status(image_id: int) -> APIResponse:
+        status = await get_vision_status(image_id)
+        return APIResponse(ok=True, data=status or {"status": "unknown"})
 
     return app
 
