@@ -6,12 +6,14 @@ from typing import Any
 
 from infra.cache.redis import redis_client
 from services.vision.queue import QUEUE_KEY, set_status
-from services.vision.openai_vision import infer_foods_from_image_bytes
+from services.vision.openai_vision import infer_foods_from_image_bytes, infer_foods_from_images_bytes
 from infra.storage.object_storage import ObjectStorage
 from infra.db.session import get_session
 from infra.db.repositories.image_repo import ImageRepo
 from infra.db.repositories.meal_repo import MealRepo
 from infra.db.repositories.vision_inference_repo import VisionInferenceRepo
+from services.vision.portion_heuristics import apply_portion_heuristics
+from services.vision.cache import get_cached_vision, set_cached_vision
 
 
 async def worker_loop(poll_interval: float = 1.0) -> None:
@@ -31,11 +33,19 @@ async def worker_loop(poll_interval: float = 1.0) -> None:
                 continue
             img = imgs[0]
             path = storage.get_path(img["object_key"])
-        # Run vision inference via OpenAI
+        # Run vision inference via OpenAI (supports multi‑image aggregation)
         try:
+            # TODO: group by media_group_id; for now single image inference
             with open(path, "rb") as f:
                 img_bytes = f.read()
-            result = infer_foods_from_image_bytes(img_bytes)
+            cached = await get_cached_vision(img_bytes)
+            if cached:
+                result = cached
+            else:
+                result = infer_foods_from_images_bytes([img_bytes])
+                await set_cached_vision(img_bytes, result)
+            items = result.get("items", [])
+            result["items"] = apply_portion_heuristics(items)
             async with get_session() as session:  # type: ignore
                 vrepo = VisionInferenceRepo(session)
                 await vrepo.create(image_id=int(image_id), provider="openai", model="gpt-4o-mini", response=result, confidence=result.get("confidence"))
