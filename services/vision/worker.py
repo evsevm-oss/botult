@@ -6,7 +6,7 @@ from typing import Any
 
 from infra.cache.redis import redis_client
 from services.vision.queue import QUEUE_KEY, set_status
-from services.vision.vision_infer import run_vision_inference
+from services.vision.openai_vision import infer_foods_from_image_bytes
 from infra.storage.object_storage import ObjectStorage
 from infra.db.session import get_session
 from infra.db.repositories.image_repo import ImageRepo
@@ -31,12 +31,14 @@ async def worker_loop(poll_interval: float = 1.0) -> None:
                 continue
             img = imgs[0]
             path = storage.get_path(img["object_key"])
-        # Run vision inference (stub)
+        # Run vision inference via OpenAI
         try:
-            result = await run_vision_inference(path)
+            with open(path, "rb") as f:
+                img_bytes = f.read()
+            result = infer_foods_from_image_bytes(img_bytes)
             async with get_session() as session:  # type: ignore
                 vrepo = VisionInferenceRepo(session)
-                await vrepo.create(image_id=int(image_id), provider="stub", model="stub", response=result, confidence=result.get("confidence"))
+                await vrepo.create(image_id=int(image_id), provider="openai", model="gpt-4o-mini", response=result, confidence=result.get("confidence"))
             await set_status(int(image_id), "ready")
         except Exception:
             await set_status(int(image_id), "failed")
