@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date as Date
 
-from sqlalchemy import insert
+from sqlalchemy import insert, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,5 +37,21 @@ class DailySummaryRepo:
         )
         await self.session.execute(stmt)
         await self.session.commit()
+
+    async def get_by_user_date(self, *, user_id: int, on_date: Date) -> dict | None:
+        from infra.db.models import DailySummary
+        stmt = select(
+            DailySummary.kcal, DailySummary.protein_g, DailySummary.fat_g, DailySummary.carb_g
+        ).where(DailySummary.user_id == user_id, DailySummary.date == on_date)
+        res = await self.session.execute(stmt)
+        row = res.first()
+        if not row:
+            return None
+        return {
+            "kcal": float(row[0]),
+            "protein_g": float(row[1]),
+            "fat_g": float(row[2]),
+            "carb_g": float(row[3]),
+        }
 
 

@@ -184,7 +184,9 @@ def create_app() -> FastAPI:
                     when=payload.date,
                 ),
             )
-        return APIResponse(ok=True, data={"ok": True})
+        # Вернем актуальные бюджеты на дату, если есть
+        ds = await DailySummaryRepo(session).get_by_user_date(user_id=user_id, on_date=payload.date)
+        return APIResponse(ok=True, data={"ok": True, "budgets": ds})
 
     @app.post("/api/webapp/verify", response_model=APIResponse)
     def webapp_verify(initData: str) -> APIResponse:
