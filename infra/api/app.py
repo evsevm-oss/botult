@@ -42,6 +42,7 @@ from infra.db.repositories.goal_repo import GoalRepo
 from infra.db.repositories.weight_repo import WeightRepo
 from infra.db.repositories.user_settings_repo import UserSettingsRepo
 from infra.cache.redis import redis_client
+from services.vision.photo_pipeline import save_photo, PhotoIn
 
 
 def create_app() -> FastAPI:
@@ -450,6 +451,15 @@ def create_app() -> FastAPI:
         d = D.fromisoformat(date)
         ds = await DailySummaryRepo(session).get_by_user_date(user_id=user_id, on_date=d)
         return APIResponse(ok=True, data=ds)
+
+    # Stage 9: receive photo (raw MVP), store to object storage and index
+    @app.post("/api/photos", response_model=APIResponse)
+    async def upload_photo(telegram_id: int, content_type: str, data: bytes) -> APIResponse:
+        users = UserRepo(None)  # not DB-bound for simple lookup; could refactor DI
+        # In real app we would use session; here stick to minimal signature
+        # store file
+        res = save_photo(telegram_id, PhotoIn(bytes=data, content_type=content_type))
+        return APIResponse(ok=True, data={"object_key": res.object_key, "sha256": res.sha256})
 
     return app
 
