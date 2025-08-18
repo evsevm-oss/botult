@@ -115,6 +115,8 @@ async def cb_meal_save(call: CallbackQuery, state: FSMContext) -> None:
             },
         )
         if r.status_code == 200:
+            payload = r.json().get("data") or {}
+            warnings = payload.get("warnings") or []
             # show day totals
             today = DT.utcnow().date().isoformat()
             s = await client.get(f"/api/daily-summary", params={"telegram_id": call.from_user.id, "date": today})
@@ -122,6 +124,8 @@ async def cb_meal_save(call: CallbackQuery, state: FSMContext) -> None:
             if s.status_code == 200 and s.json().get("data"):
                 ds = s.json()["data"]
                 txt += f"\nИтоги дня: {int(ds['kcal'])} ккал, Б:{int(ds['protein_g'])} Ж:{int(ds['fat_g'])} У:{int(ds['carb_g'])}"
+            if warnings:
+                txt += "\n\nПредупреждения:\n" + "\n".join([f"• {w}" for w in warnings])
             await call.message.edit_text(txt)
         else:
             await call.message.edit_text("Не удалось сохранить приём. Попробуйте позже.")

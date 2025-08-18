@@ -11,6 +11,7 @@ from infra.storage.object_storage import ObjectStorage
 from infra.db.session import get_session
 from infra.db.repositories.image_repo import ImageRepo
 from infra.db.repositories.meal_repo import MealRepo
+from infra.db.repositories.vision_inference_repo import VisionInferenceRepo
 
 
 async def worker_loop(poll_interval: float = 1.0) -> None:
@@ -33,7 +34,9 @@ async def worker_loop(poll_interval: float = 1.0) -> None:
         # Run vision inference (stub)
         try:
             result = await run_vision_inference(path)
-            # TODO: persist vision_inferences, attach to meal draft, notify user
+            async with get_session() as session:  # type: ignore
+                vrepo = VisionInferenceRepo(session)
+                await vrepo.create(image_id=int(image_id), provider="stub", model="stub", response=result, confidence=result.get("confidence"))
             await set_status(int(image_id), "ready")
         except Exception:
             await set_status(int(image_id), "failed")
