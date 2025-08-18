@@ -29,6 +29,7 @@ from .schemas import (
     MealCreate,
     MealUpdate,
     MealOutput,
+    UserSettingsDTO,
 )
 from domain.use_cases.normalize_text import normalize_text_async
 from infra.db.repositories.meal_repo import MealRepo
@@ -36,6 +37,7 @@ from infra.db.repositories.user_repo import UserRepo
 from infra.db.repositories.profile_repo import ProfileRepo
 from infra.db.repositories.goal_repo import GoalRepo
 from infra.db.repositories.weight_repo import WeightRepo
+from infra.db.repositories.user_settings_repo import UserSettingsRepo
 
 
 def create_app() -> FastAPI:
@@ -89,11 +91,13 @@ def create_app() -> FastAPI:
     async def get_profile(telegram_id: int, session: AsyncSession = Depends(get_session)) -> APIResponse:
         users = UserRepo(session)
         profiles = ProfileRepo(session)
+        settings_repo = UserSettingsRepo(session)
         user_id = await users.get_by_telegram_id(telegram_id)
         if user_id is None:
             return APIResponse(ok=True, data=None)
         prof = await profiles.get_by_user_id(user_id)
-        return APIResponse(ok=True, data=prof)
+        prefs = await settings_repo.get(user_id) or {}
+        return APIResponse(ok=True, data={"profile": prof, "settings": prefs})
 
     @app.post("/api/profile", response_model=APIResponse)
     async def upsert_profile(
@@ -103,6 +107,7 @@ def create_app() -> FastAPI:
     ) -> APIResponse:
         users = UserRepo(session)
         profiles = ProfileRepo(session)
+        settings_repo = UserSettingsRepo(session)
         user_id = await users.get_or_create_by_telegram_id(telegram_id)
         await profiles.upsert_profile(
             user_id=user_id,
@@ -126,7 +131,26 @@ def create_app() -> FastAPI:
                 goal=payload.goal,
             ),
         )
+        # Ensure settings record exists
+        await settings_repo.upsert(user_id, data={})
         return APIResponse(ok=True, data={"user_id": user_id})
+
+    # User settings
+    @app.get("/api/settings", response_model=APIResponse)
+    async def get_settings(telegram_id: int, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        settings_repo = UserSettingsRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        prefs = await settings_repo.get(user_id) or {}
+        return APIResponse(ok=True, data=prefs)
+
+    @app.post("/api/settings", response_model=APIResponse)
+    async def upsert_settings(telegram_id: int, payload: UserSettingsDTO, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        settings_repo = UserSettingsRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        await settings_repo.upsert(user_id, data=payload.model_dump(exclude_none=True))
+        return APIResponse(ok=True, data={"ok": True})
 
     # Goals CRUD
     @app.get("/api/goals", response_model=APIResponse)

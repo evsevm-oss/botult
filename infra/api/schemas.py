@@ -114,3 +114,10 @@ class MealOutput(BaseModel):
     items: list[MealItemIn]
 
 
+class UserSettingsDTO(BaseModel):
+    # Minimal settings for warnings/preferences; can be extended later
+    allergies: list[str] | None = None
+    diet_mode: Literal["none", "keto", "vegan", "vegetarian", "low_fat", "high_protein"] | None = None
+    preferred_units: Literal["metric", "imperial"] | None = None
+
+
