@@ -18,6 +18,7 @@ from infra.db.repositories.daily_summary_repo import DailySummaryRepo
 from fastapi import Depends, Request
 import time
 import structlog
+from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from .schemas import (
     APIResponse,
@@ -232,13 +233,19 @@ def create_app() -> FastAPI:
 
     # Meals CRUD (subset)
     @app.get("/api/meals", response_model=APIResponse)
-    async def list_meals(telegram_id: int, date: str, session: AsyncSession = Depends(get_session)) -> APIResponse:
+    async def list_meals(telegram_id: int, date: str, tz: str | None = None, session: AsyncSession = Depends(get_session)) -> APIResponse:
         users = UserRepo(session)
         repo = MealRepo(session)
         user_id = await users.get_or_create_by_telegram_id(telegram_id)
-        on_date = date  # YYYY-MM-DD
-        from datetime import date as D
-        meals = await repo.list_by_date(user_id=user_id, on_date=D.fromisoformat(on_date))
+        from datetime import date as D, datetime as DT
+        tzname = tz or "UTC"
+        z = ZoneInfo(tzname)
+        local_date = D.fromisoformat(date)
+        start_local = DT.combine(local_date, DT.min.time()).replace(tzinfo=z)
+        end_local = DT.combine(local_date, DT.max.time()).replace(tzinfo=z)
+        start_utc = start_local.astimezone(ZoneInfo("UTC"))
+        end_utc = end_local.astimezone(ZoneInfo("UTC"))
+        meals = await repo.list_between(user_id=user_id, start=start_utc, end=end_utc)
         return APIResponse(ok=True, data={"items": meals})
 
     @app.post("/api/meals", response_model=APIResponse)
@@ -325,6 +332,11 @@ def create_app() -> FastAPI:
         user_id = await users.get_or_create_by_telegram_id(telegram_id)
         # transactional update + summary recompute
         from datetime import date as D
+        # get previous meal date for recompute
+        prev = await repo.get_by_id(meal_id=meal_id, user_id=user_id)
+        prev_d: D | None = None
+        if prev:
+            prev_d = D.fromisoformat(prev["at"][:10])
         d = D.fromisoformat((payload.at or DT.utcnow()).date().isoformat())
         try:
             await repo.update_meal(
@@ -347,6 +359,11 @@ def create_app() -> FastAPI:
         await DailySummaryRepo(session).upsert_daily_summary(
             user_id=user_id, on_date=d, kcal=sums["kcal"], protein_g=sums["protein_g"], fat_g=sums["fat_g"], carb_g=sums["carb_g"], autocommit=False
         )
+        if prev_d and prev_d != d:
+            sums_prev = await repo.sum_macros_for_date(user_id=user_id, on_date=prev_d)
+            await DailySummaryRepo(session).upsert_daily_summary(
+                user_id=user_id, on_date=prev_d, kcal=sums_prev["kcal"], protein_g=sums_prev["protein_g"], fat_g=sums_prev["fat_g"], carb_g=sums_prev["carb_g"], autocommit=False
+            )
         await session.commit()
         # metrics
         try:
@@ -423,6 +440,16 @@ def create_app() -> FastAPI:
         if xtrace:
             log.bind(trace_id=xtrace).info("normalize_done", took_ms=took_ms)
         return NormalizeResponse(**out.__dict__)
+
+    # Daily summary
+    @app.get("/api/daily-summary", response_model=APIResponse)
+    async def get_daily_summary(telegram_id: int, date: str, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        from datetime import date as D
+        d = D.fromisoformat(date)
+        ds = await DailySummaryRepo(session).get_by_user_date(user_id=user_id, on_date=d)
+        return APIResponse(ok=True, data=ds)
 
     return app
 

@@ -48,7 +48,7 @@ async def on_meal_text(message: Message, state: FSMContext) -> None:
                 # идемпотентность: запомним update_id входящего текста
                 if message.update_id:
                     await redis_client.setex(f"seen:update:{message.from_user.id}:{message.update_id}", 86400, "1")
-                await state.set_data({"items": items, "text": text})
+                await state.set_data({"items": items, "text": text, "source_update_id": message.update_id})
                 await state.set_state(AddMealStates.preview)
                 await message.answer(f"Предварительная нормализация:\n{preview}", reply_markup=kb)
         else:
@@ -111,11 +111,18 @@ async def cb_meal_save(call: CallbackQuery, state: FSMContext) -> None:
                 "notes": data.get("text"),
                 "source_chat_id": call.message.chat.id,
                 "source_message_id": call.message.message_id,
-                "source_update_id": None,
+                "source_update_id": data.get("source_update_id"),
             },
         )
         if r.status_code == 200:
-            await call.message.edit_text("Сохранено ✅")
+            # show day totals
+            today = DT.utcnow().date().isoformat()
+            s = await client.get(f"/api/daily-summary", params={"telegram_id": call.from_user.id, "date": today})
+            txt = "Сохранено ✅"
+            if s.status_code == 200 and s.json().get("data"):
+                ds = s.json()["data"]
+                txt += f"\nИтоги дня: {int(ds['kcal'])} ккал, Б:{int(ds['protein_g'])} Ж:{int(ds['fat_g'])} У:{int(ds['carb_g'])}"
+            await call.message.edit_text(txt)
         else:
             await call.message.edit_text("Не удалось сохранить приём. Попробуйте позже.")
     await state.clear()

@@ -12,7 +12,8 @@ function MealsPage() {
     const initDataUnsafe = tg?.initDataUnsafe
     const user = initDataUnsafe?.user
     const telegram_id = user?.id
-    fetch(`/api/meals?telegram_id=${telegram_id}&date=${date}`)
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    fetch(`/api/meals?telegram_id=${telegram_id}&date=${date}&tz=${encodeURIComponent(tz)}`)
       .then(r => r.json())
       .then(j => setItems(j?.data?.items || []))
       .finally(() => setLoading(false))

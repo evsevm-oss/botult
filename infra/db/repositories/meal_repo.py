@@ -109,6 +109,44 @@ class MealRepo:
             )
         return meals
 
+    async def list_between(self, *, user_id: int, start: datetime, end: datetime) -> list[dict[str, Any]]:
+        res = await self.session.execute(
+            select(Meal).where(Meal.user_id == user_id, Meal.at >= start, Meal.at <= end).order_by(Meal.at.asc())
+        )
+        meals: list[dict[str, Any]] = []
+        rows = res.scalars().all()
+        if not rows:
+            return []
+        meal_ids = [m.id for m in rows]
+        items_map: dict[int, list[dict[str, Any]]] = {mid: [] for mid in meal_ids}
+        res_it = await self.session.execute(select(MealItem).where(MealItem.meal_id.in_(meal_ids)))
+        for it in res_it.scalars().all():
+            items_map[it.meal_id].append(
+                dict(
+                    id=it.id,
+                    name=it.name,
+                    amount=it.amount,
+                    unit=it.unit,
+                    kcal=it.kcal,
+                    protein_g=it.protein_g,
+                    fat_g=it.fat_g,
+                    carb_g=it.carb_g,
+                    source=it.source,
+                )
+            )
+        for m in rows:
+            meals.append(
+                dict(
+                    id=m.id,
+                    at=m.at.isoformat(),
+                    type=m.type,
+                    status=m.status,
+                    notes=m.notes,
+                    items=items_map.get(m.id, []),
+                )
+            )
+        return meals
+
     async def get_by_id(self, *, meal_id: int, user_id: int) -> dict[str, Any] | None:
         res = await self.session.execute(select(Meal).where(Meal.id == meal_id, Meal.user_id == user_id))
         m = res.scalar_one_or_none()
