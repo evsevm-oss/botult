@@ -46,6 +46,7 @@ from services.vision.photo_pipeline import save_photo, PhotoIn
 from services.vision.processing import preprocess_photo
 from services.vision.queue import enqueue as enqueue_vision, VisionTask, get_status as get_vision_status
 from infra.db.repositories.image_repo import ImageRepo
+from infra.cache.redis import redis_client as _redis
 
 
 def create_app() -> FastAPI:
@@ -481,6 +482,63 @@ def create_app() -> FastAPI:
     async def photo_status(image_id: int) -> APIResponse:
         status = await get_vision_status(image_id)
         return APIResponse(ok=True, data=status or {"status": "unknown"})
+
+    # Aggregate mediagroup images and run multi‑image vision; return preview items
+    @app.post("/api/photo-groups/commit", response_model=APIResponse)
+    async def photo_group_commit(telegram_id: int, group_id: str, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        key = f"mediagroup:{telegram_id}:{group_id}"
+        image_ids = []
+        try:
+            # consume all ids in the list
+            while True:
+                v = await _redis.lpop(key)
+                if not v:
+                    break
+                image_ids.append(int(v))
+        except Exception:
+            pass
+        if not image_ids:
+            return APIResponse(ok=False, error={"code": "E_EMPTY_GROUP", "message": "No images in group"})
+        # For MVP: pick handle image = last one; get latest inference for each and merge items
+        from infra.db.repositories.vision_inference_repo import VisionInferenceRepo
+        vrepo = VisionInferenceRepo(session)
+        items: list[dict] = []
+        for iid in image_ids:
+            inf = await vrepo.get_latest_by_image(image_id=iid)
+            if inf and inf.get("response"):
+                items.extend(inf["response"].get("items", []))
+        return APIResponse(ok=True, data={"handle_image_id": image_ids[-1], "items": items})
+
+    # Save photo inference as meal
+    @app.post("/api/photos/{image_id}/save", response_model=APIResponse)
+    async def photo_save(image_id: int, telegram_id: int, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        repo = MealRepo(session)
+        from infra.db.repositories.vision_inference_repo import VisionInferenceRepo
+        vrepo = VisionInferenceRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        inf = await vrepo.get_latest_by_image(image_id=image_id)
+        if not inf:
+            raise HTTPException(status_code=404, detail="Inference not found")
+        items = inf["response"].get("items", [])
+        from datetime import datetime as DT, date as D
+        at = DT.utcnow()
+        meal_id = await repo.create_meal(
+            user_id=user_id,
+            at=at,
+            meal_type=MealRepo.suggest_meal_type(at),
+            items=items,
+            notes=f"photo:{image_id}",
+            status="confirmed",
+            autocommit=False,
+        )
+        d = D.fromisoformat(at.date().isoformat())
+        sums = await repo.sum_macros_for_date(user_id=user_id, on_date=d)
+        await DailySummaryRepo(session).upsert_daily_summary(
+            user_id=user_id, on_date=d, kcal=sums["kcal"], protein_g=sums["protein_g"], fat_g=sums["fat_g"], carb_g=sums["carb_g"], autocommit=False
+        )
+        await session.commit()
+        return APIResponse(ok=True, data={"meal_id": meal_id})
 
     return app
 

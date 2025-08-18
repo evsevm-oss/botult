@@ -13,6 +13,7 @@ from infra.db.session import get_session
 from infra.db.repositories.image_repo import ImageRepo
 from infra.db.repositories.vision_inference_repo import VisionInferenceRepo
 from infra.db.repositories.meal_repo import MealRepo
+import asyncio
 
 
 basic_router = Router()
@@ -59,20 +60,67 @@ async def on_photo(message: Message) -> None:
         if message.photo:
             photos = [message.photo[-1]]  # best quality
         # Для медиагруппы aiogram вызывает обработчик для каждого элемента — складываем по одному
+        last_image_id: int | None = None
         for p in photos:
             file = await bot.get_file(p.file_id)
             url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.get(url)
                 data = resp.content
-                await client.post(
+                r = await client.post(
                     "/api/photos",
                     params={"telegram_id": message.from_user.id, "content_type": "image/jpeg"},
                     content=data,
                 )
+                if r.status_code == 200:
+                    last_image_id = (r.json().get("data") or {}).get("image_id")
     except Exception:
         pass
-    await message.answer("Фото получено. Поставлено в очередь на распознавание. Сообщу, когда будет готово.")
+    if message.media_group_id:
+        # агрегируем группу, попробуем автоматически закоммитить через 2 сек
+        gid = message.media_group_id
+        uid = message.from_user.id
+        if last_image_id:
+            await redis_client.rpush(f"mediagroup:{uid}:{gid}", last_image_id)
+            await redis_client.expire(f"mediagroup:{uid}:{gid}", 120)
+        # один шедулер на группу
+        if await redis_client.set(f"mediagroup:{uid}:{gid}:lock", "1", ex=5, nx=True):
+            async def _finalize():
+                await asyncio.sleep(2.0)
+                async with httpx.AsyncClient(base_url=settings.api_base_url, timeout=20.0) as client:
+                    cr = await client.post("/api/photo-groups/commit", params={"telegram_id": uid, "group_id": gid})
+                    data = cr.json().get("data") if cr.status_code == 200 else None
+                    if not data:
+                        await message.answer("Не удалось собрать альбом. Попробуйте ещё раз.")
+                        return
+                    items = data.get("items", [])
+                    img_id = data.get("handle_image_id")
+                    preview = "\n".join(
+                        f"• {i['name']} — {int(i.get('amount',0))}{i.get('unit','g')} ≈ {int(i.get('kcal',0))} ккал" for i in items
+                    )
+                    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Сохранить", callback_data=f"photo_save:{img_id}"), InlineKeyboardButton(text="Отменить", callback_data=f"photo_cancel:{img_id}")]])
+                    await message.answer(f"Распознано по альбому:\n{preview}", reply_markup=kb)
+            asyncio.create_task(_finalize())
+        else:
+            # просто уведомим о получении
+            await message.answer("Фото получены. Объединяю изображения…")
+    else:
+        await message.answer("Фото получено. Поставлено в очередь на распознавание. Сообщу, когда будет готово.")
+
+
+@basic_router.callback_query(F.data.startswith("photo_save:"))
+async def cb_photo_save(call, state):
+    image_id = int(call.data.split(":",1)[1])
+    async with httpx.AsyncClient(base_url=settings.api_base_url, timeout=20.0) as client:
+        r = await client.post(f"/api/photos/{image_id}/save", params={"telegram_id": call.from_user.id})
+        if r.status_code == 200:
+            await call.message.edit_text("Сохранено ✅")
+        else:
+            await call.message.edit_text("Не удалось сохранить")
+
+@basic_router.callback_query(F.data.startswith("photo_cancel:"))
+async def cb_photo_cancel(call, state):
+    await call.message.edit_text("Отменено.")
 
 
 @basic_router.message(F.text.startswith("/checkphoto"))
