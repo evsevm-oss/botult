@@ -38,3 +38,15 @@ class ProfileDTO(BaseModel):
     goal: Literal["lose", "maintain", "gain"]
 
 
+class GoalDTO(BaseModel):
+    target_type: Literal["weight", "bodyfat"]
+    target_value: float
+    pace: float | None = None
+    active: bool = True
+
+
+class WeightInput(BaseModel):
+    date: date
+    weight_kg: float
+
+
