@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     s3_bucket: str | None = Field(None, alias="S3_BUCKET")
     s3_access_key_id: str | None = Field(None, alias="S3_ACCESS_KEY_ID")
     s3_secret_access_key: str | None = Field(None, alias="S3_SECRET_ACCESS_KEY")
+    vision_daily_limit: int = Field(100, alias="VISION_DAILY_LIMIT")
+    max_image_px: int = Field(1600, alias="MAX_IMAGE_PX")
 
     # CORS / Web
     allowed_origins: str = Field("http://localhost:5173,http://localhost:3000", alias="ALLOWED_ORIGINS")

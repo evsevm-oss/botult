@@ -461,6 +461,13 @@ def create_app() -> FastAPI:
     async def upload_photo(telegram_id: int, content_type: str, data: bytes, session: AsyncSession = Depends(get_session)) -> APIResponse:
         users = UserRepo(session)
         user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        # rate limit per user per day
+        from datetime import date as D
+        today = D.today().isoformat()
+        key = f"lim:vision:{user_id}:{today}"
+        used = int(await redis_client.get(key) or 0)
+        if used >= settings.vision_daily_limit:
+            raise HTTPException(status_code=429, detail="E_VISION_LIMIT")
         # preprocess
         processed = preprocess_photo(data, content_type)
         res = save_photo(user_id, PhotoIn(bytes=processed.bytes, content_type=processed.content_type, width=processed.width, height=processed.height))
@@ -476,6 +483,8 @@ def create_app() -> FastAPI:
         )
         # enqueue vision task
         await enqueue_vision(VisionTask(image_id=image_id, user_id=user_id))
+        await redis_client.incr(key)
+        await redis_client.expire(key, 60 * 60 * 24)
         return APIResponse(ok=True, data={"image_id": image_id, "object_key": res.object_key, "sha256": res.sha256, "status": "queued"})
 
     @app.get("/api/photos/{image_id}/status", response_model=APIResponse)
