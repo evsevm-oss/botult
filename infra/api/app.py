@@ -28,6 +28,7 @@ from .schemas import (
     NormalizeResponse,
 )
 from domain.use_cases.normalize_text import normalize_text_async
+from infra.db.repositories.meal_repo import MealRepo
 from infra.db.repositories.user_repo import UserRepo
 from infra.db.repositories.profile_repo import ProfileRepo
 from infra.db.repositories.goal_repo import GoalRepo
@@ -197,6 +198,43 @@ def create_app() -> FastAPI:
         # Вернем актуальные бюджеты на дату, если есть
         ds = await DailySummaryRepo(session).get_by_user_date(user_id=user_id, on_date=payload.date)
         return APIResponse(ok=True, data={"ok": True, "budgets": ds})
+
+    # Meals CRUD (subset)
+    @app.get("/api/meals", response_model=APIResponse)
+    async def list_meals(telegram_id: int, date: str, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        repo = MealRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        on_date = date  # YYYY-MM-DD
+        from datetime import date as D
+        meals = await repo.list_by_date(user_id=user_id, on_date=D.fromisoformat(on_date))
+        return APIResponse(ok=True, data={"items": meals})
+
+    @app.post("/api/meals", response_model=APIResponse)
+    async def create_meal(telegram_id: int, payload: MealCreate, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        repo = MealRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        meal_id = await repo.create_meal(
+            user_id=user_id,
+            at=payload.at,
+            meal_type=payload.type,
+            items=[i.model_dump() for i in payload.items],
+            notes=payload.notes,
+        )
+        # update summary
+        from datetime import date as D
+        d = D.fromisoformat(payload.at.date().isoformat())
+        meals = await repo.list_by_date(user_id=user_id, on_date=d)
+        # recompute day from items sum
+        kcal = sum(x["kcal"] for m in meals for x in m["items"])
+        protein = sum(x["protein_g"] for m in meals for x in m["items"])
+        fat = sum(x["fat_g"] for m in meals for x in m["items"])
+        carb = sum(x["carb_g"] for m in meals for x in m["items"])
+        await DailySummaryRepo(session).upsert_daily_summary(
+            user_id=user_id, on_date=d, kcal=kcal, protein_g=protein, fat_g=fat, carb_g=carb
+        )
+        return APIResponse(ok=True, data={"id": meal_id})
 
     @app.post("/api/webapp/verify", response_model=APIResponse)
     def webapp_verify(initData: str) -> APIResponse:

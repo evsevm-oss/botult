@@ -76,3 +76,20 @@ class NormalizeResponse(BaseModel):
     clarifications: list[str] | None = None
 
 
+class MealItemIn(BaseModel):
+    name: str
+    unit: Literal["g", "ml", "piece"]
+    amount: float
+    kcal: float
+    protein_g: float
+    fat_g: float
+    carb_g: float
+
+
+class MealCreate(BaseModel):
+    at: datetime
+    type: Literal["breakfast", "lunch", "dinner", "snack"]
+    items: list[MealItemIn]
+    notes: str | None = None
+
+

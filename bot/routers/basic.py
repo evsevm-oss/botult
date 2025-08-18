@@ -3,6 +3,9 @@ from __future__ import annotations
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
+from datetime import datetime
+import httpx
+from core.config import settings
 
 from domain.use_cases import CalculateBudgetsInput, calculate_budgets
 
@@ -43,11 +46,18 @@ async def cmd_budget(message: Message) -> None:
 
 @basic_router.message(F.photo)
 async def on_photo(message: Message) -> None:
-    await message.answer("Фото получено. Vision/LLM подключим на следующих этапах.")
+    # Черновик приема: пока просто подтверждаем получение и подсказываем, что распознавание будет выполнено позже
+    await message.answer("Фото получено. Создан черновик приема. Распознавание будет выполнено на этапе 9.")
 
 
 @basic_router.message(Command("photo"))
 async def cmd_photo(message: Message) -> None:
     await message.answer("Пришлите фото блюда одним сообщением — я подтвержу получение и позже распознаю.")
+
+
+@basic_router.message(F.voice | F.audio)
+async def on_audio(message: Message) -> None:
+    # MVP: подсказка о голосовом вводе
+    await message.answer("Голосовое сообщение получено. Распознавание речи будет добавлено в рамках этапа 8.")
 
 
