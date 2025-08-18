@@ -29,7 +29,10 @@ async def cmd_addmeal(message: Message, state: FSMContext) -> None:
 @meal_router.message(AddMealStates.waiting_text, F.text)
 async def on_meal_text(message: Message, state: FSMContext) -> None:
     text = message.text or ""
-    async with httpx.AsyncClient(base_url=settings.api_base_url, timeout=10.0) as client:
+    headers = {}
+    if (trace_id := (await state.get_data()).get("trace_id")):
+        headers["X-Trace-Id"] = str(trace_id)
+    async with httpx.AsyncClient(base_url=settings.api_base_url, timeout=10.0, headers=headers) as client:
         r = await client.post("/api/normalize", json={"text": text, "locale": "ru", "telegram_id": message.from_user.id})
         if r.status_code == 200:
             data = r.json()

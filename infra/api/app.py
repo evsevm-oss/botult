@@ -15,7 +15,9 @@ from domain.use_cases import (
 )
 from infra.db.session import get_session
 from infra.db.repositories.daily_summary_repo import DailySummaryRepo
-from fastapi import Depends
+from fastapi import Depends, Request
+import time
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 from .schemas import (
     APIResponse,
@@ -43,6 +45,7 @@ from infra.cache.redis import redis_client
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Ultima Calories API", version="0.1.0")
+    log = structlog.get_logger("api")
     # CORS
     app.add_middleware(
         CORSMiddleware,
@@ -239,7 +242,7 @@ def create_app() -> FastAPI:
         return APIResponse(ok=True, data={"items": meals})
 
     @app.post("/api/meals", response_model=APIResponse)
-    async def create_meal(telegram_id: int, payload: MealCreate, session: AsyncSession = Depends(get_session)) -> APIResponse:
+    async def create_meal(telegram_id: int, payload: MealCreate, request: Request, session: AsyncSession = Depends(get_session)) -> APIResponse:
         users = UserRepo(session)
         repo = MealRepo(session)
         user_id = await users.get_or_create_by_telegram_id(telegram_id)
@@ -277,6 +280,7 @@ def create_app() -> FastAPI:
             await redis_client.incr("metrics:meals:total")
             if (payload.status or "draft") == "confirmed":
                 await redis_client.incr("metrics:meals:confirmed")
+            await redis_client.incrbyfloat("metrics:meals:items_total", float(sum(len(payload.items) for _ in [0])))
         except Exception:
             pass
         # warnings based on user settings
@@ -314,7 +318,7 @@ def create_app() -> FastAPI:
         return APIResponse(ok=True, data=meal)
 
     @app.patch("/api/meals/{meal_id}", response_model=APIResponse)
-    async def update_meal(meal_id: int, telegram_id: int, payload: MealUpdate, session: AsyncSession = Depends(get_session)) -> APIResponse:
+    async def update_meal(meal_id: int, telegram_id: int, payload: MealUpdate, request: Request, session: AsyncSession = Depends(get_session)) -> APIResponse:
         from datetime import datetime as DT
         users = UserRepo(session)
         repo = MealRepo(session)
@@ -351,6 +355,8 @@ def create_app() -> FastAPI:
             after = await repo.get_by_id(meal_id=meal_id, user_id=user_id)
             if after and after.get("status") == "confirmed":
                 await redis_client.incr("metrics:meals:confirmed")
+            if payload.items is not None:
+                await redis_client.incrbyfloat("metrics:meals:items_total", float(len(payload.items)))
         except Exception:
             pass
         # warnings
@@ -399,8 +405,19 @@ def create_app() -> FastAPI:
 
     # Stage 7: normalization endpoint (text based MVP)
     @app.post("/api/normalize", response_model=NormalizeResponse)
-    async def normalize(payload: NormalizeInput) -> NormalizeResponse:
+    async def normalize(payload: NormalizeInput, request: Request) -> NormalizeResponse:
+        started = time.perf_counter()
         out = await normalize_text_async(payload.text, locale=payload.locale)
+        took_ms = (time.perf_counter() - started) * 1000.0
+        try:
+            await redis_client.incr("metrics:normalize:count")
+            await redis_client.incrbyfloat("metrics:normalize:ms_total", took_ms)
+        except Exception:
+            pass
+        # log trace if header present
+        xtrace = request.headers.get("X-Trace-Id")
+        if xtrace:
+            log.bind(trace_id=xtrace).info("normalize_done", took_ms=took_ms)
         return NormalizeResponse(**out.__dict__)
 
     return app
