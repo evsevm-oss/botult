@@ -8,6 +8,7 @@ import httpx
 from core.config import settings
 
 from domain.use_cases import CalculateBudgetsInput, calculate_budgets
+from infra.cache.redis import redis_client
 
 
 basic_router = Router()
@@ -46,6 +47,9 @@ async def cmd_budget(message: Message) -> None:
 
 @basic_router.message(F.photo)
 async def on_photo(message: Message) -> None:
+    # идемпотентность: отметим update_id как увиденный
+    if message.update_id:
+        await redis_client.setex(f"seen:update:{message.from_user.id}:{message.update_id}", 3600, "1")
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Сохранить", callback_data="meal_confirm"), InlineKeyboardButton(text="Отменить", callback_data="meal_cancel")]])
     await message.answer("Фото получено. Создан черновик приема. Распознавание будет выполнено на этапе 9.", reply_markup=kb)
 
@@ -57,6 +61,8 @@ async def cmd_photo(message: Message) -> None:
 
 @basic_router.message(F.voice | F.audio)
 async def on_audio(message: Message) -> None:
+    if message.update_id:
+        await redis_client.setex(f"seen:update:{message.from_user.id}:{message.update_id}", 3600, "1")
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Сохранить", callback_data="meal_confirm"), InlineKeyboardButton(text="Отменить", callback_data="meal_cancel")]])
     await message.answer("Голосовое сообщение получено. Распознавание речи будет добавлено в рамках этапа 8.", reply_markup=kb)
 

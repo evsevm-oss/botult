@@ -226,7 +226,7 @@ def create_app() -> FastAPI:
             meal_id = await repo.create_meal(
                 user_id=user_id,
                 at=payload.at,
-                meal_type=payload.type,
+                meal_type=payload.type or MealRepo.suggest_meal_type(payload.at),
                 items=[i.model_dump() for i in payload.items],
                 notes=payload.notes,
                 status=payload.status or "draft",

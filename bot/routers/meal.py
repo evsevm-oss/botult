@@ -7,6 +7,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 import httpx
 from core.config import settings
+from infra.cache.redis import redis_client
 
 
 meal_router = Router()
@@ -39,6 +40,9 @@ async def on_meal_text(message: Message, state: FSMContext) -> None:
                     for i in items
                 )
                 kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Сохранить", callback_data="meal_save"), InlineKeyboardButton(text="Отменить", callback_data="meal_cancel")], [InlineKeyboardButton(text="Править", callback_data="meal_edit")]])
+                # идемпотентность: запомним update_id входящего текста
+                if message.update_id:
+                    await redis_client.setex(f"seen:update:{message.from_user.id}:{message.update_id}", 86400, "1")
                 await state.set_data({"items": items, "text": text})
                 await state.set_state(AddMealStates.preview)
                 await message.answer(f"Предварительная нормализация:\n{preview}", reply_markup=kb)
@@ -60,13 +64,13 @@ async def cb_meal_save(call: CallbackQuery, state: FSMContext) -> None:
             params={"telegram_id": call.from_user.id},
             json={
                 "at": DT.utcnow().isoformat(),
-                "type": "snack",
+                "type": None,
                 "status": "confirmed",
                 "items": items,
                 "notes": data.get("text"),
                 "source_chat_id": call.message.chat.id,
                 "source_message_id": call.message.message_id,
-                "source_update_id": call.id if call.id and call.id.isdigit() else None,
+                "source_update_id": None,
             },
         )
         if r.status_code == 200:

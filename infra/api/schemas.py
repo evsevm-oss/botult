@@ -88,7 +88,7 @@ class MealItemIn(BaseModel):
 
 class MealCreate(BaseModel):
     at: datetime
-    type: Literal["breakfast", "lunch", "dinner", "snack"]
+    type: Literal["breakfast", "lunch", "dinner", "snack"] | None = None
     items: list[MealItemIn]
     notes: str | None = None
     status: Literal["draft", "confirmed"] | None = None
