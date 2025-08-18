@@ -222,18 +222,25 @@ def create_app() -> FastAPI:
         # transactional section below uses autocommit=False and explicit session.commit()
         from datetime import date as D
         d = D.fromisoformat(payload.at.date().isoformat())
-        meal_id = await repo.create_meal(
-            user_id=user_id,
-            at=payload.at,
-            meal_type=payload.type,
-            items=[i.model_dump() for i in payload.items],
-            notes=payload.notes,
-            status=payload.status or "draft",
-            source_chat_id=payload.source_chat_id,
-            source_message_id=payload.source_message_id,
-            source_update_id=payload.source_update_id,
-            autocommit=False,
-        )
+        try:
+            meal_id = await repo.create_meal(
+                user_id=user_id,
+                at=payload.at,
+                meal_type=payload.type,
+                items=[i.model_dump() for i in payload.items],
+                notes=payload.notes,
+                status=payload.status or "draft",
+                source_chat_id=payload.source_chat_id,
+                source_message_id=payload.source_message_id,
+                source_update_id=payload.source_update_id,
+                autocommit=False,
+            )
+        except Exception as e:
+            from sqlalchemy.exc import IntegrityError
+            if isinstance(e, IntegrityError):
+                await session.rollback()
+                raise HTTPException(status_code=409, detail="E_DUPLICATE_MEAL_SOURCE")
+            raise
         sums = await repo.sum_macros_for_date(user_id=user_id, on_date=d)
         await DailySummaryRepo(session).upsert_daily_summary(
             user_id=user_id, on_date=d, kcal=sums["kcal"], protein_g=sums["protein_g"], fat_g=sums["fat_g"], carb_g=sums["carb_g"], autocommit=False
@@ -260,16 +267,23 @@ def create_app() -> FastAPI:
         # transactional update + summary recompute
         from datetime import date as D
         d = D.fromisoformat((payload.at or DT.utcnow()).date().isoformat())
-        await repo.update_meal(
-            meal_id=meal_id,
-            user_id=user_id,
-            at=payload.at,
-            meal_type=payload.type,
-            status=payload.status,
-            items=[i.model_dump() for i in payload.items] if payload.items is not None else None,
-            notes=payload.notes,
-            autocommit=False,
-        )
+        try:
+            await repo.update_meal(
+                meal_id=meal_id,
+                user_id=user_id,
+                at=payload.at,
+                meal_type=payload.type,
+                status=payload.status,
+                items=[i.model_dump() for i in payload.items] if payload.items is not None else None,
+                notes=payload.notes,
+                autocommit=False,
+            )
+        except Exception as e:
+            from sqlalchemy.exc import IntegrityError
+            if isinstance(e, IntegrityError):
+                await session.rollback()
+                raise HTTPException(status_code=409, detail="E_DUPLICATE_MEAL_SOURCE")
+            raise
         sums = await repo.sum_macros_for_date(user_id=user_id, on_date=d)
         await DailySummaryRepo(session).upsert_daily_summary(
             user_id=user_id, on_date=d, kcal=sums["kcal"], protein_g=sums["protein_g"], fat_g=sums["fat_g"], carb_g=sums["carb_g"], autocommit=False

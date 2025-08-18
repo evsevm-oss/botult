@@ -20,3 +20,42 @@
 
 Форматы ответов REST: `{ "ok": true, "data": … } | { "ok": false, "error": { "code": "…", "message": "…" } }`
 
+## Meals API
+
+- GET `/api/meals?date=YYYY-MM-DD&telegram_id=...` → `{ ok, data: { items: Meal[] } }`
+- GET `/api/meals/{id}?telegram_id=...` → `{ ok, data: Meal }`
+- POST `/api/meals?telegram_id=...` body `MealCreate` → `{ ok, data: { id } }`
+- PATCH `/api/meals/{id}?telegram_id=...` body `MealUpdate` → `{ ok, data: { updated: true } }`
+- DELETE `/api/meals/{id}?telegram_id=...` → `{ ok, data: { deleted: true } }`
+
+### MealCreate
+```json
+{
+  "at": "2025-01-01T12:34:56Z",
+  "type": "lunch",
+  "status": "draft|confirmed",
+  "items": [
+    { "name": "chicken", "unit": "g", "amount": 150, "kcal": 165, "protein_g": 31, "fat_g": 3.6, "carb_g": 0 }
+  ],
+  "notes": "...",
+  "source_chat_id": 123,
+  "source_message_id": 456,
+  "source_update_id": 789
+}
+```
+
+### MealUpdate
+```json
+{
+  "at": "2025-01-01T12:34:56Z",
+  "type": "dinner",
+  "status": "confirmed",
+  "items": [ ... ],
+  "notes": "..."
+}
+```
+
+### Errors
+- `E_DUPLICATE_MEAL_SOURCE` — нарушение идемпотентности (повторный `update_id`/`chat+message`)
+- `E_VALIDATION` — некорректные значения (массы/БЖУ и др.)
+
