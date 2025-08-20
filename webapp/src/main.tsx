@@ -1,7 +1,6 @@
-import React from 'react'
-import { createRoot } from 'react-dom/client'
-import { ProfilePage } from './profile'
 import React, { useEffect, useState } from 'react'
+import { createRoot } from 'react-dom/client'
+import TelegramWebAppMainMockup from './TelegramWebAppMainMockup'
 
 function MealsPage() {
   const [items, setItems] = useState<any[]>([])
@@ -77,7 +76,7 @@ function MealsPage() {
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <MealsPage />
+    <TelegramWebAppMainMockup />
   </React.StrictMode>
 )
 
