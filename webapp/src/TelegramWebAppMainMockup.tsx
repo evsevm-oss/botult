@@ -21,7 +21,8 @@ const RootStyles: React.FC = () => (
     html,body{margin:0;padding:0}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Noto Sans','Apple Color Emoji','Segoe UI Emoji';-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
     img,svg,video,canvas{display:block;max-width:100%}
-    button,input,select,textarea{font:inherit;color:inherit;background:transparent;border:0}
+    button,input,select,textarea{font:inherit;color:inherit;background:transparent;border:0;-webkit-appearance:none;appearance:none;padding:0;border-radius:0}
+    a{color:inherit;text-decoration:none}
     #root{isolation:isolate}
     :root {
       --bg: var(--tg-theme-bg-color, #0b1020);
@@ -51,7 +52,7 @@ const RootStyles: React.FC = () => (
     .btn-primary:focus-visible { outline: 2px solid rgba(109,40,217,0.65); outline-offset: 2px; }
     .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
     .btn-ghost { background: transparent; color: var(--text); border: 1px solid rgba(255,255,255,0.14); }
-    .tab { display:inline-flex; align-items:center; justify-content:center; min-height: 36px; height: auto; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); white-space: nowrap; line-height: 1; }
+    .tab { display:inline-flex; align-items:center; justify-content:center; min-height: 36px; height: auto; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); white-space: nowrap; line-height: 1; background: transparent; }
     .tab-active { background: rgba(109,40,217,0.22); border-color: rgba(109,40,217,0.42); }
     .tabs { display:flex; gap:8px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
     .tabs::-webkit-scrollbar{ display:none; }
@@ -61,7 +62,7 @@ const RootStyles: React.FC = () => (
     .metric-btn { width:100%; text-align:left; cursor:pointer; }
     .metric-btn:focus { outline: 2px solid rgba(109,40,217,0.65); outline-offset: 2px; }
     .value-xl { font-size: 20px; font-weight: 700; }
-    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.16); color: var(--muted); font-size: 12px; line-height: 18px; white-space: nowrap; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.16); color: var(--muted); font-size: 12px; line-height: 18px; white-space: nowrap; background: transparent; }
     .mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
     .shadow-xl { box-shadow: 0 10px 30px rgba(16,24,40,0.35); }
     .main-gradient { background: radial-gradient(1200px 400px at 50% -10%, rgba(99,102,241,0.25), transparent), radial-gradient(800px 300px at 0% 10%, rgba(147,51,234,0.15), transparent), radial-gradient(800px 300px at 100% 10%, rgba(56,189,248,0.12), transparent); }
