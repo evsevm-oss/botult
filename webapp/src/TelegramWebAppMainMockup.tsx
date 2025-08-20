@@ -66,6 +66,41 @@ const RootStyles: React.FC = () => (
     @keyframes sk { 100% { transform: translateX(100%); } }
     @media (min-width: 960px) { .grid-desktop { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; } }
 
+    /* Utilities (to mimic small subset of tailwind, ensure consistent layout on all devices) */
+    .flex{display:flex}
+    .flex-wrap{flex-wrap:wrap}
+    .flex-col{display:flex;flex-direction:column}
+    .items-center{align-items:center}
+    .justify-between{justify-content:space-between}
+    .gap-1{gap:4px}
+    .gap-2{gap:8px}
+    .gap-3{gap:12px}
+    .mt-1{margin-top:4px}
+    .mt-3{margin-top:12px}
+    .mt-4{margin-top:16px}
+    .mb-3{margin-bottom:12px}
+    .mr-1{margin-right:4px}
+    .pr-3{padding-right:12px}
+    .p-4{padding:16px}
+    .p-3{padding:12px}
+    .px-3{padding-left:12px;padding-right:12px}
+    .pt-3{padding-top:12px}
+    .w-full{width:100%}
+    .text-left{text-align:left}
+    .truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .text-xs{font-size:12px}
+    .text-lg{font-size:18px}
+    .h-5{height:20px}
+    .h-10{height:40px}
+    .h-16{height:64px}
+    .minh-360{min-height:360px}
+    .grid{display:grid}
+    .grid-cols-6{grid-template-columns:repeat(6,minmax(0,1fr))}
+    .grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .row-grid{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center}
+    @media (min-width:960px){.md\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
     /* Modal */
     .modal-root { position: fixed; inset: 0; z-index: 50; }
     .backdrop { position: fixed; inset: 0; background: rgba(2, 6, 23, 0.55); z-index: 50; }
@@ -199,22 +234,22 @@ const MainInfo: React.FC<MainInfoProps> = ({ values, onEditGoal, onEditCalories,
   <Card>
     <div className="space-y-3">
       {/* Группа 1 */}
-      <div className="grid grid-cols-6 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-6 gap-3 md:grid-cols-3 grid-tiles">
         {/* Цель */}
-        <button className="metric metric-btn col-span-3 row-span-2 md:col-span-1 md:row-span-1 flex flex-col" onClick={onEditGoal} aria-label="Изменить цель">
+        <button className="metric metric-btn tile-half tile-row-2 tile-md-col-1 tile-md-row-1 flex-col" onClick={onEditGoal} aria-label="Изменить цель">
           <div className="subtle text-[12px] mb-1">Цель</div>
           <div className="value-xl">{values.goalTitle}</div>
           {values.goalNote ? <div className="subtle text-xs">{values.goalNote}</div> : null}
           <div className="pill mt-auto self-end">{values.dateRange}</div>
         </button>
         {/* Калории */}
-        <button className="metric metric-btn col-span-3 md:col-span-1" onClick={onEditCalories} aria-label="Изменить план калорий">
+        <button className="metric metric-btn tile-half tile-md-col-1" onClick={onEditCalories} aria-label="Изменить план калорий">
           <div className="subtle text-[12px] mb-1">Калории</div>
           <div className="value-xl mono">{`< ${nf(values.calPlan)} ккал`}</div>
           <div className="pill mt-1">план на день</div>
         </button>
         {/* Протеин */}
-        <button className="metric metric-btn col-span-3 md:col-span-1" onClick={onEditProtein} aria-label="Изменить план протеина">
+        <button className="metric metric-btn tile-half tile-md-col-1" onClick={onEditProtein} aria-label="Изменить план протеина">
           <div className="subtle text-[12px] mb-1">Протеин</div>
           <div className="value-xl mono">{`> ${nf(values.protPlan)} г`}</div>
           <div className="pill mt-1">план на день</div>
