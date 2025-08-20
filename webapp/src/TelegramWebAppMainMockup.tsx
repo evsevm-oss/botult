@@ -93,6 +93,8 @@ const RootStyles: React.FC = () => (
     .h-5{height:20px}
     .h-10{height:40px}
     .h-16{height:64px}
+    .h-220{height:220px}
+    .h-240{height:240px}
     .minh-360{min-height:360px}
     .grid{display:grid}
     .grid-cols-6{grid-template-columns:repeat(6,minmax(0,1fr))}
@@ -328,7 +330,7 @@ const WeightFatWidget: React.FC<{ initial?: WFPoint[] }> = ({ initial }) => {
         </div>
       }
     >
-      <div style={{ width: '100%', height: 220 }}>
+      <div className="h-220" style={{ width: '100%' }}>
         <ResponsiveContainer>
           <LineChart data={data} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
             <CartesianGrid stroke="var(--chart-grid)" />
@@ -364,7 +366,7 @@ const CaloriesProteinWidget: React.FC<{ weekly?: { d: string; kcal: number; prot
 
   return (
     <Card title="Потребление калорий и протеина" className="mb-3">
-      <div className="chart-wrap" style={{ width: '100%', height: 240 }}>
+      <div className="chart-wrap h-240" style={{ width: '100%' }}>
         <div className="chart-labels">
           <span className="pill">План калорий 1950</span>
           <span className="pill">План протеина 120</span>
