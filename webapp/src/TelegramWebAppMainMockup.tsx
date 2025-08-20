@@ -19,7 +19,7 @@ const RootStyles: React.FC = () => (
   <style>{`
     *,*::before,*::after{box-sizing:border-box}
     html,body{margin:0;padding:0}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Noto Sans','Apple Color Emoji','Segoe UI Emoji';-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,Arial,'Noto Sans','Apple Color Emoji','Segoe UI Emoji',sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
     img,svg,video,canvas{display:block;max-width:100%}
     button,input,select,textarea{font:inherit;color:inherit;background:transparent;border:0;-webkit-appearance:none;appearance:none;padding:0;border-radius:0}
     a{color:inherit;text-decoration:none}
@@ -52,8 +52,9 @@ const RootStyles: React.FC = () => (
     .btn-primary:focus-visible { outline: 2px solid rgba(109,40,217,0.65); outline-offset: 2px; }
     .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
     .btn-ghost { background: transparent; color: var(--text); border: 1px solid rgba(255,255,255,0.14); }
-    .tab { display:inline-flex; align-items:center; justify-content:center; min-height: 36px; height: auto; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); white-space: nowrap; line-height: 1; background: transparent; }
+    .tab { display:inline-flex; align-items:center; justify-content:center; min-height: 36px; height: auto; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); white-space: nowrap; line-height: 1; background: rgba(255,255,255,0.06); color: var(--text); }
     .tab-active { background: rgba(109,40,217,0.22); border-color: rgba(109,40,217,0.42); }
+    .tab:active{filter:brightness(0.95)}
     .tabs { display:flex; gap:8px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
     .tabs::-webkit-scrollbar{ display:none; }
     .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
@@ -62,7 +63,7 @@ const RootStyles: React.FC = () => (
     .metric-btn { width:100%; text-align:left; cursor:pointer; }
     .metric-btn:focus { outline: 2px solid rgba(109,40,217,0.65); outline-offset: 2px; }
     .value-xl { font-size: 20px; font-weight: 700; }
-    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.16); color: var(--muted); font-size: 12px; line-height: 18px; white-space: nowrap; background: transparent; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.16); color: var(--muted); font-size: 12px; line-height: 18px; white-space: nowrap; background: rgba(255,255,255,0.04); max-width:100%; overflow:hidden; text-overflow:ellipsis; }
     .mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
     .shadow-xl { box-shadow: 0 10px 30px rgba(16,24,40,0.35); }
     .main-gradient { background: radial-gradient(1200px 400px at 50% -10%, rgba(99,102,241,0.25), transparent), radial-gradient(800px 300px at 0% 10%, rgba(147,51,234,0.15), transparent), radial-gradient(800px 300px at 100% 10%, rgba(56,189,248,0.12), transparent); }
@@ -117,6 +118,7 @@ const RootStyles: React.FC = () => (
     .grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .row-grid{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center}
+    .row-grid>button{background:none!important;border:0!important;padding:0!important;border-radius:0!important}
     .mb-1{margin-bottom:4px}
     .mb-2{margin-bottom:8px}
     .mt-auto{margin-top:auto}
@@ -144,7 +146,7 @@ const RootStyles: React.FC = () => (
     /* Modal */
     .modal-root { position: fixed; inset: 0; z-index: 50; }
     .backdrop { position: fixed; inset: 0; background: rgba(2, 6, 23, 0.55); z-index: 50; }
-    .modal { position: fixed; z-index: 51; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(92vw, 420px); background: var(--card); border:1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 16px; }
+    .modal { position: fixed; z-index: 51; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(86vw, 420px); background: var(--card); border:1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 16px; }
     .field { display:flex; flex-direction:column; gap:6px; margin-top:10px; }
     .input { width:100%; height:40px; border-radius: 10px; background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); padding: 0 10px; color: var(--text); }
     .modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
@@ -273,7 +275,7 @@ const MainInfo: React.FC<MainInfoProps> = ({ values, onEditGoal, onEditCalories,
           <div className="subtle text-[12px] mb-1">Цель</div>
           <div className="value-xl">{values.goalTitle}</div>
           {values.goalNote ? <div className="subtle text-xs">{values.goalNote}</div> : null}
-          <div className="pill mt-auto self-end">{values.dateRange}</div>
+          <div className="pill mt-auto self-end" title={values.dateRange} style={{maxWidth:'100%'}}>{values.dateRange}</div>
         </button>
         {/* Калории */}
         <button className="metric metric-btn tile-half" onClick={onEditCalories} aria-label="Изменить план калорий">
