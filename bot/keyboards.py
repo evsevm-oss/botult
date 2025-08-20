@@ -20,7 +20,11 @@ def main_menu_kb() -> InlineKeyboardMarkup:
 
 
 def webapp_cta_kb(screen: str | None = None, date_iso: str | None = None) -> InlineKeyboardMarkup:
-    url = settings.webapp_url or ""
+    base = (settings.webapp_url or "").strip()
+    # Если URL пустой/некорректный — вернуть пустую клавиатуру, чтобы не падать на стороне Telegram
+    if not base or ("://" not in base):
+        return InlineKeyboardMarkup(inline_keyboard=[])
+    url = base
     params = []
     if screen:
         params.append(f"screen={screen}")
