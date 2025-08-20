@@ -1,3 +1,36 @@
+## WebApp (Stage 12): Build & Run
+
+### Requirements
+- Node.js 20+
+- Python 3.11+
+
+### Build the WebApp
+```bash
+cd webapp
+npm ci
+npm run build
+```
+Artifacts are emitted to `webapp/dist/` with hashed asset filenames. Vite `base` is set to `/webapp/`.
+
+### Serve via FastAPI (static hosting)
+```bash
+uvicorn infra.api.app:app --reload
+```
+Then open `http://localhost:8000/webapp/`.
+
+Notes:
+- The API mounts the built WebApp from `webapp/dist` at `/webapp` and applies a CSP suitable for Telegram WebApp.
+
+### Dev mode (Vite)
+```bash
+cd webapp
+npm run dev
+```
+Open `http://localhost:5173/webapp/`.
+
+### CI
+GitHub Actions workflow `webapp-build.yml` builds the WebApp on push and pull requests that touch `webapp/**`.
+
 # Телеграм-бот подсчета калорий по фото — Этап 0
 
 ![Канонический образ персонажа](character/character_bot.png)

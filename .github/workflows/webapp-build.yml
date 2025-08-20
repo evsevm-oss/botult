@@ -1,0 +1,40 @@
+name: WebApp Build
+
+on:
+  push:
+    paths:
+      - 'webapp/**'
+      - '.github/workflows/webapp-build.yml'
+  pull_request:
+    paths:
+      - 'webapp/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: webapp/package.json
+
+      - name: Install deps
+        working-directory: webapp
+        run: npm ci
+
+      - name: Build
+        working-directory: webapp
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webapp-dist
+          path: webapp/dist
+
+
