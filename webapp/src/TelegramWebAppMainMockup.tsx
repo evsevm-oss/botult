@@ -32,7 +32,7 @@ const RootStyles: React.FC = () => (
       --radius: 16px;
     }
     html, body, #root { height: 100%; background: var(--bg); color: var(--text); }
-    .container { padding-top: calc(env(safe-area-inset-top, 0px) + 12px); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 108px); min-height: 100%; }
+    .container { position:relative; padding-top: calc(env(safe-area-inset-top, 0px) + 12px); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 108px); min-height: 100vh; box-sizing: border-box; }
     .glass { background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03)); backdrop-filter: saturate(160%) blur(8px); border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius); }
     .card { background: var(--card); border-radius: var(--radius); border: 1px solid rgba(255,255,255,0.08); }
     .h1 { font-size: 20px; font-weight: 700; }
@@ -440,10 +440,10 @@ const FoodListWidget: React.FC<{
 const MainButtonDock: React.FC<{ state: 'default'|'disabled'|'loading', label: string, onClick?: () => void }>
   = ({ state, label, onClick }) => (
   <div
-    className="fixed left-0 right-0 bottom-0 px-3 pt-3 main-gradient"
+    className="px-3 pt-3 main-gradient"
     role="region"
     aria-label="MainButton dock"
-    style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}
+    style={{ position: 'fixed', left: 0, right: 0, bottom: 0, paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)', zIndex: 40 }}
   >
     <button
       className="btn btn-primary w-full shadow-xl flex items-center justify-center gap-2"
