@@ -308,16 +308,6 @@ const WeightFatWidget: React.FC<{ initial?: WFPoint[] }> = ({ initial }) => {
         </ResponsiveContainer>
       </div>
     </Card>
-    {/* Экспорт CSV - незаметная кнопка в карточке сводки */}
-    <div className="flex justify-end mt-2">
-      <a
-        className="tab"
-        href={(() => { const tgId = getTelegramId(); const today = new Date(); const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6).toISOString().slice(0,10); return `/api/summary/weekly.csv?telegram_id=${tgId||''}&start=${start}&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC')}`; })()}
-        download
-      >
-        Скачать CSV
-      </a>
-    </div>
   );
 };
 
