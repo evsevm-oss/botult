@@ -576,7 +576,20 @@ export default function TelegramWebAppMainMockup() {
   const openFat = () => { setTmpGender('male'); setTmpHeightCm(''); setTmpWeightKg(String(weight)); setTmpWaistCm(''); setTmpNeckCm(''); setModal({ type: 'fat' }); };
   const saveFat = () => {
     const bf = computeBodyFat(tmpGender, parseNum(tmpHeightCm), parseNum(tmpWeightKg), parseNum(tmpWaistCm), parseNum(tmpNeckCm));
-    if (bf != null && isFinite(bf) && bf >= 0) { const val = Math.round(bf * 10) / 10; setFatPct(val); setFatHistory(h => [...h, val]); }
+    if (bf != null && isFinite(bf) && bf >= 0) {
+      const val = Math.round(bf * 10) / 10;
+      setFatPct(val);
+      setFatHistory(h => [...h, val]);
+      // send to server
+      const tgId = getTelegramId();
+      if (tgId) {
+        const today = todayISO();
+        apiFetch(`/api/bodyfat?telegram_id=${tgId}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: today, percent: val })
+        }).catch(() => {});
+      }
+    }
     close();
   };
 
@@ -612,7 +625,7 @@ export default function TelegramWebAppMainMockup() {
       try {
         const tgId = getTelegramId();
         if (!tgId) { setLoading(false); return; }
-        // Weekly summary
+        // Weekly summary: use /api/summary/weekly to derive bars; optionally fetch /api/weights for WF graph later
         const today = new Date();
         const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6).toISOString().slice(0,10);
         const r1 = await apiFetch(`/api/summary/weekly?telegram_id=${tgId}&start=${start}`);
@@ -621,6 +634,15 @@ export default function TelegramWebAppMainMockup() {
           const items = b1.data.items as { date: string; kcal: number; protein_g: number }[];
           const ser = items.map(it => ({ d: it.date.slice(5), kcal: Number(it.kcal||0), protein: Number(it.protein_g||0) }));
           setWeeklySeries(ser);
+        }
+        // Optionally, fetch weights to populate WF graph
+        const r3 = await apiFetch(`/api/weights?telegram_id=${tgId}&start=${start}`);
+        const b3 = await r3.json();
+        if (b3?.ok && Array.isArray(b3?.data?.items)) {
+          const items = b3.data.items as { date: string; weight_kg: number }[];
+          const wf = items.map((it) => ({ x: it.date, d: it.date.slice(5), weight: Number(it.weight_kg||0), fat: NaN as unknown as number }));
+          // keep fat series empty for now; UI will only plot weight when fat NaN
+          setWfSeries(wf);
         }
         // Meals for selected date
         const r2 = await apiFetch(`/api/meals?telegram_id=${tgId}&date=${diaryDateISO}`);

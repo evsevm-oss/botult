@@ -121,3 +121,16 @@ class UserSettingsDTO(BaseModel):
     preferred_units: Literal["metric", "imperial"] | None = None
 
 
+# BodyFat
+class BodyFatEstimateInput(BaseModel):
+    gender: Literal["male", "female", "other"]
+    height_cm: float
+    weight_kg: float
+    waist_cm: float
+    neck_cm: float
+
+
+class BodyFatInput(BaseModel):
+    date: date
+    percent: float
+

@@ -37,6 +37,8 @@ from .schemas import (
     MealUpdate,
     MealOutput,
     UserSettingsDTO,
+    BodyFatEstimateInput,
+    BodyFatInput,
 )
 from domain.use_cases.normalize_text import normalize_text_async
 from infra.db.repositories.meal_repo import MealRepo
@@ -260,6 +262,38 @@ def create_app() -> FastAPI:
         e = D.fromisoformat(end) if end else D.today()
         items = await wrepo.list_between(user_id=user_id, start=s, end=e)
         return APIResponse(ok=True, data={"items": items})
+    # Body fat
+    @app.post("/api/bodyfat/estimate", response_model=APIResponse)
+    def bodyfat_estimate(telegram_id: int, payload: BodyFatEstimateInput) -> APIResponse:
+        # Navy tape method (approximate, consistent with UI)
+        import math
+        h_in = payload.height_cm / 2.54
+        w_in = payload.waist_cm / 2.54
+        n_in = payload.neck_cm / 2.54
+        if h_in <= 0:
+            raise HTTPException(status_code=400, detail="E_INVALID_INPUT")
+        if payload.gender == 'female':
+            weight_lb = payload.weight_kg * 2.2046226218
+            if w_in <= 0 or weight_lb <= 0:
+                raise HTTPException(status_code=400, detail="E_INVALID_INPUT")
+            bf = ((w_in * 4.15) - (weight_lb * 0.082) - 76.76) / weight_lb * 100
+        else:
+            if (w_in - n_in) <= 0:
+                raise HTTPException(status_code=400, detail="E_INVALID_INPUT")
+            bf = 86.010 * (math.log10(w_in - n_in)) - 70.041 * (math.log10(h_in)) + 36.76
+        return APIResponse(ok=True, data={"percent": float(bf)})
+
+    @app.post("/api/bodyfat", response_model=APIResponse)
+    async def bodyfat_save(telegram_id: int, payload: BodyFatInput, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        # naive store: reuse DailySummary to keep latest bodyfat in profile-like storage or separate table (not yet)
+        # For now, write to user_settings as last_bodyfat
+        settings_repo = UserSettingsRepo(session)
+        current = await settings_repo.get(user_id) or {}
+        current["last_bodyfat"] = {"date": payload.date.isoformat(), "percent": float(payload.percent)}
+        await settings_repo.upsert(user_id, data=current)
+        return APIResponse(ok=True, data={"ok": True})
 
     @app.post("/api/weights", response_model=APIResponse)
     async def add_weight(telegram_id: int, payload: WeightInput, session: AsyncSession = Depends(get_session)) -> APIResponse:
