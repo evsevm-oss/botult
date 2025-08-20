@@ -89,4 +89,14 @@ export const apiFetch = async (input: string, init: RequestInit = {}): Promise<R
   return fetch(input, { ...init, headers });
 };
 
+export const getTelegramId = (): number | null => {
+  try {
+    const tg: any = (window as any).Telegram?.WebApp;
+    const id = tg?.initDataUnsafe?.user?.id;
+    return typeof id === 'number' ? id : null;
+  } catch {
+    return null;
+  }
+};
+
 

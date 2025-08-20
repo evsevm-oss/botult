@@ -245,6 +245,22 @@ def create_app() -> FastAPI:
         return APIResponse(ok=True, data={"deleted": True})
 
     # Weights
+    @app.get("/api/weights", response_model=APIResponse)
+    async def list_weights(
+        telegram_id: int,
+        start: str | None = None,
+        end: str | None = None,
+        session: AsyncSession = Depends(get_session),
+    ) -> APIResponse:
+        users = UserRepo(session)
+        wrepo = WeightRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        from datetime import date as D, timedelta
+        s = D.fromisoformat(start) if start else (D.today() - timedelta(days=30))
+        e = D.fromisoformat(end) if end else D.today()
+        items = await wrepo.list_between(user_id=user_id, start=s, end=e)
+        return APIResponse(ok=True, data={"items": items})
+
     @app.post("/api/weights", response_model=APIResponse)
     async def add_weight(telegram_id: int, payload: WeightInput, session: AsyncSession = Depends(get_session)) -> APIResponse:
         users = UserRepo(session)

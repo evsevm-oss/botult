@@ -13,6 +13,7 @@ import {
   Legend,
 } from "recharts";
 import { Loader2, Trash2, Pencil, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { apiFetch, getTelegramId } from './auth';
 
 const RootStyles: React.FC = () => (
   <style>{`
@@ -250,10 +251,10 @@ const genWeightFat = (days: number): WFPoint[] => {
   return res;
 };
 
-const WeightFatWidget: React.FC = () => {
+const WeightFatWidget: React.FC<{ initial?: WFPoint[] }> = ({ initial }) => {
   const [period, setPeriod] = useState<'week'|'month'|'q'|'year'>('month');
   const daysMap = { week: 7, month: 30, q: 90, year: 365 } as const;
-  const data = useMemo(() => genWeightFat(daysMap[period]), [period]);
+  const data = useMemo(() => initial && initial.length ? initial : genWeightFat(daysMap[period]), [period, initial]);
 
   const wMin = Math.min(...data.map(p => p.weight));
   const wMax = Math.max(...data.map(p => p.weight));
@@ -292,20 +293,21 @@ const WeightFatWidget: React.FC = () => {
   );
 };
 
-const CaloriesProteinWidget: React.FC = () => {
+const CaloriesProteinWidget: React.FC<{ weekly?: { d: string; kcal: number; protein: number; }[] }> = ({ weekly }) => {
   const CAL_PLAN = 1950;
   const PROT_PLAN = 120; // граммы
 
-  const maxK = useMemo(() => Math.max(...last7.map(x => x.kcal), CAL_PLAN), []);
-  const maxP = useMemo(() => Math.max(...last7.map(x => x.protein), PROT_PLAN), []);
+  const series = weekly && weekly.length ? weekly : last7;
+  const maxK = useMemo(() => Math.max(...series.map(x => x.kcal), CAL_PLAN), [series]);
+  const maxP = useMemo(() => Math.max(...series.map(x => x.protein), PROT_PLAN), [series]);
   const yLeftMax = useMemo(() => Math.ceil((maxK * 1.6) / 50) * 50, [maxK]);
   const yRightMax = useMemo(() => Math.ceil((maxP * 1.6) / 5) * 5, [maxP]);
 
   const avg = useMemo(() => {
-    const ak = last7.reduce((s, x) => s + x.kcal, 0) / last7.length;
-    const ap = last7.reduce((s, x) => s + x.protein, 0) / last7.length;
+    const ak = series.reduce((s, x) => s + x.kcal, 0) / series.length;
+    const ap = series.reduce((s, x) => s + x.protein, 0) / series.length;
     return { ak, ap };
-  }, []);
+  }, [series]);
 
   return (
     <Card title="Потребление калорий и протеина" className="mb-3">
@@ -315,7 +317,7 @@ const CaloriesProteinWidget: React.FC = () => {
           <span className="pill">План протеина 120</span>
         </div>
         <ResponsiveContainer>
-          <BarChart data={last7} margin={{ left: 8, right: 8, top: 8, bottom: 0 }} barCategoryGap="28%">
+          <BarChart data={series} margin={{ left: 8, right: 8, top: 8, bottom: 0 }} barCategoryGap="28%">
             <CartesianGrid stroke="var(--chart-grid)" />
             <XAxis dataKey="d" tick={{ fill: 'var(--muted)' }} />
             <YAxis yAxisId="left" tick={{ fill: 'var(--muted)' }} domain={[0, yLeftMax]} />
@@ -512,8 +514,8 @@ function DevTests() {
 
 export default function TelegramWebAppMainMockup() {
   const [mbState] = useState<'default'|'disabled'|'loading'>('default');
-  const [offline] = useState(false);
-  const [loading] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [loading, setLoading] = useState(true);
   
 
   // Верхние плитки
@@ -601,6 +603,47 @@ export default function TelegramWebAppMainMockup() {
   const values = { goalTitle, goalNote, dateRange, calPlan, protPlan, weight, weightDelta, fatPct, fatDelta };
   const mainButtonLabel = makeMainButtonLabel(kcalToday);
 
+  // Backend integrations: load weekly summary and meals
+  const [weeklySeries, setWeeklySeries] = useState<{ d: string; kcal: number; protein: number }[] | null>(null);
+  const [wfSeries, setWfSeries] = useState<WFPoint[] | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const tgId = getTelegramId();
+        if (!tgId) { setLoading(false); return; }
+        // Weekly summary
+        const today = new Date();
+        const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6).toISOString().slice(0,10);
+        const r1 = await apiFetch(`/api/summary/weekly?telegram_id=${tgId}&start=${start}`);
+        const b1 = await r1.json();
+        if (b1?.ok && Array.isArray(b1?.data?.items)) {
+          const items = b1.data.items as { date: string; kcal: number; protein_g: number }[];
+          const ser = items.map(it => ({ d: it.date.slice(5), kcal: Number(it.kcal||0), protein: Number(it.protein_g||0) }));
+          setWeeklySeries(ser);
+        }
+        // Meals for selected date
+        const r2 = await apiFetch(`/api/meals?telegram_id=${tgId}&date=${diaryDateISO}`);
+        const b2 = await r2.json();
+        if (b2?.ok && Array.isArray(b2?.data?.items)) {
+          const meals = b2.data.items as any[];
+          const list: Food[] = [];
+          meals.forEach(m => {
+            (m.items || []).forEach((it: any) => list.push({ name: it.name, kcal: Number(it.kcal||0), protein: Number(it.protein_g||0), weight: Number(it.amount||0) }));
+          });
+          if (list.length) setFoodList(list);
+        }
+        setOffline(false);
+      } catch {
+        setOffline(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+    // reload meals when date changes
+  }, [diaryDateISO]);
+
   return (
     <div className="container px-3">
       <RootStyles />
@@ -641,7 +684,7 @@ export default function TelegramWebAppMainMockup() {
               <div className="skeleton h-5 w-64 mb-3 rounded"></div>
               <div className="skeleton h-[220px] rounded"></div>
             </div>
-          ) : <WeightFatWidget />}
+          ) : <WeightFatWidget initial={wfSeries || undefined} />}
 
           {loading ? (
             <div className="card p-4">
@@ -652,7 +695,7 @@ export default function TelegramWebAppMainMockup() {
                 <div className="skeleton h-16 rounded"></div>
               </div>
             </div>
-          ) : <CaloriesProteinWidget />}
+          ) : <CaloriesProteinWidget weekly={weeklySeries || undefined} />}
         </div>
 
         {/* Правая колонка */}
