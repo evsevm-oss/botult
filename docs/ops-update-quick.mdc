@@ -1,61 +1,87 @@
-## Быстрое обновление кода на VPS (OVH Debian)
+## Обновление кода на сервере (для новичков)
 
-Эта инструкция — короткая «памятка» для обновления кода после локальных изменений. Предполагается, что сервер уже подготовлен один раз (есть `/root/calorie-photo-bot`, `.env`, настроены systemd‑сервисы `ultima-api.service` и `ultima-bot.service`). Для первичной установки см. `docs/ops-deployment.mdc`.
+Эта инструкция объясняет, как быстро накатить ваши локальные изменения на VPS (OVH Debian) и перезапустить бота/АПИ.
+Предполагается, что сервер уже однажды настроен (есть `/root/calorie-photo-bot`, файл `.env` и systemd‑сервисы `ultima-api.service` и `ultima-bot.service`).
+Если сервера ещё нет — сначала пройдите `docs/ops-deployment.mdc`.
 
-### 1) На Mac — собрать архив и загрузить на сервер
+Обозначения (подставьте свои значения):
+- `<VPS_IP>` — IP вашего сервера (например, 57.129.75.190)
+- `<SSH_KEY>` — путь к вашему приватному ключу (например, `~/.ssh/ovh-vps`)
 
+Пример конкретного SSH для входа на сервер:
+```bash
+ssh -o IdentitiesOnly=yes -i ~/.ssh/ovh-vps debian@57.129.75.190
+```
+
+### Шаг 0. Открыть Терминал на Mac
+- Откройте «Terminal» (Spotlight → введите Terminal → Enter).
+
+### Шаг 1. Упаковать ваш проект в архив (на Mac)
 ```bash
 cd "/Users/evgenii/Проекты/Боты/Бот подсчета калорий по фото"
 
-# Собираем архив без .env, .venv и мусора macOS/Node
+# Важно: не кладём в архив .env и .venv (секреты/бинарники локальные)
 zip -r -X ~/calorie-bot.zip . \
   -x ".git/*" "*/.venv/*" "venv/*" "__pycache__/*" \
      "node_modules/*" "webapp/node_modules/*" ".DS_Store" ".env"
 
-# Загружаем под пользователем debian (используем ваш ключ)
-scp -o IdentitiesOnly=yes -i ~/.ssh/ovh-vps \
-  ~/calorie-bot.zip debian@57.129.75.190:/home/debian/update.zip
+ls -lh ~/calorie-bot.zip   # быстрая проверка файла
 ```
 
-### 2) На VPS — распаковать и применить
-
+### Шаг 2. Загрузить архив на сервер (на Mac)
 ```bash
-# Вход на сервер и переход в root
-ssh -o IdentitiesOnly=yes -i ~/.ssh/ovh-vps debian@57.129.75.190
+export VPS_IP=57.129.75.190
+export SSH_KEY=~/.ssh/ovh-vps
+
+# Пример:
+# export VPS_IP=57.129.75.190
+# export SSH_KEY=~/.ssh/ovh-vps
+
+scp -o IdentitiesOnly=yes -i "$SSH_KEY" \
+  ~/calorie-bot.zip debian@"$VPS_IP":/home/debian/update.zip
+
+# Проверим, что файл появился под ожидаемым именем
+ssh -o IdentitiesOnly=yes -i "$SSH_KEY" debian@"$VPS_IP" 'ls -lh /home/debian/update.zip'
+```
+
+### Шаг 3. Зайти на сервер и развернуть архив (на сервере)
+```bash
+ssh -o IdentitiesOnly=yes -i "$SSH_KEY" debian@"$VPS_IP"
 sudo -i
 
-# Перемещаем архив в каталог проекта и распаковываем
 mkdir -p /root/calorie-photo-bot
 mv /home/debian/update.zip /root/calorie-photo-bot/update.zip
 cd /root/calorie-photo-bot
+apt-get update -y && apt-get install -y unzip python3-venv
 unzip -o update.zip | cat
 
-# Обновляем зависимости в виртуальном окружении
+# Создать/обновить виртуальное окружение и зависимости
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip
 pip install -r requirements.txt
 
-# Применяем миграции БД
+# Миграции БД (ожидается корректный DATABASE_URL в .env)
 export PYTHONPATH=/root/calorie-photo-bot
 alembic upgrade head
+```
 
-# Перезапускаем сервисы
+### Шаг 4. Перезапустить сервисы
+```bash
 systemctl restart ultima-api.service
 systemctl restart ultima-bot.service
 
-# Быстрые проверки
+# Проверки
 curl -s http://127.0.0.1:8000/health | cat
 journalctl -u ultima-bot.service -n 60 --no-pager -o cat
 ```
 
-### 3) Если бот не отвечает
-
+### Если бот не отвечает
 ```bash
 cd /root/calorie-photo-bot
 set -a; source .env; set +a
 
-# Снять возможный конфликт поллеров и удалить вебхук
+# Убить случайные «ручные» поллеры и удалить вебхук
 pkill -f "python .*bot/main.py" || true
 [ -n "$TELEGRAM_BOT_TOKEN" ] && \
   curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/deleteWebhook" | cat
@@ -68,7 +94,25 @@ systemctl restart ultima-bot.service
 journalctl -u ultima-bot.service -n 80 --no-pager -o cat
 ```
 
-Примечания:
-- Не включайте `.env` и `.venv` в архив — секреты и бинарники разные для macOS/VPS.
-- Если ошибки подключения к БД — проверьте `DATABASE_URL` в `.env` и что PostgreSQL запущен (`systemctl status postgresql`).
+### Частые ошибки и решения
+- «Exec format error» при `pip`/`python` в виртуалке: вы случайно включили `.venv` из macOS в архив. Решение: `rm -rf .venv` на сервере, затем заново `python3 -m venv .venv` и `pip install -r requirements.txt`. Убедитесь, что `.venv` исключён из архива.
+- Ошибка подключения к БД (Connection refused 127.0.0.1:5432): проверьте, что PostgreSQL установлен и запущен (`systemctl status postgresql`), и что `DATABASE_URL` в `.env` вида `postgresql+asyncpg://user:pass@127.0.0.1:5432/dbname`.
+- «Unauthorized» от Telegram: проверьте `TELEGRAM_BOT_TOKEN` в `.env` и запрос `getMe` (см. выше). Часто помогает удалить вебхук и перезапустить сервис.
+- «terminated by other getUpdates request»: запущено несколько поллеров. Убейте лишние процессы (`pkill ...`), удалите вебхук и убедитесь, что бот запускается только через systemd.
+
+### Сборка и выкладка WebApp
+
+Если вы меняли фронтенд `webapp/new_webapp/telegram_web_app_main.jsx`:
+
+```bash
+cd "/Users/evgenii/Проекты/Боты/Бот подсчета калорий по фото/webapp/new_webapp"
+npm ci
+npm run build
+
+# загрузка артефактов сборки на сервер (пример):
+rsync -avz dist/ debian@"$VPS_IP":/home/debian/dist-webapp/
+ssh -o IdentitiesOnly=yes -i "$SSH_KEY" debian@"$VPS_IP" \
+  'sudo -i bash -lc "mkdir -p /root/calorie-photo-bot/static/webapp && rsync -avz /home/debian/dist-webapp/ /root/calorie-photo-bot/static/webapp/ && systemctl restart ultima-api.service"'
+```
+
 

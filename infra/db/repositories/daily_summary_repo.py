@@ -34,7 +34,7 @@ class DailySummaryRepo:
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=[DailySummary.user_id, DailySummary.date],
-            set_(dict(kcal=kcal, protein_g=protein_g, fat_g=fat_g, carb_g=carb_g)),
+            set_=dict(kcal=kcal, protein_g=protein_g, fat_g=fat_g, carb_g=carb_g),
         )
         await self.session.execute(stmt)
         if autocommit:
@@ -55,5 +55,24 @@ class DailySummaryRepo:
             "fat_g": float(row[2]),
             "carb_g": float(row[3]),
         }
+
+    async def list_between(self, *, user_id: int, start: Date, end: Date) -> list[dict]:
+        from infra.db.models import DailySummary
+        stmt = (
+            select(DailySummary.date, DailySummary.kcal, DailySummary.protein_g, DailySummary.fat_g, DailySummary.carb_g)
+            .where(DailySummary.user_id == user_id, DailySummary.date >= start, DailySummary.date <= end)
+            .order_by(DailySummary.date.asc())
+        )
+        res = await self.session.execute(stmt)
+        out: list[dict] = []
+        for d, kcal, p, f, c in res.all():
+            out.append({
+                "date": d.isoformat(),
+                "kcal": float(kcal),
+                "protein_g": float(p),
+                "fat_g": float(f),
+                "carb_g": float(c),
+            })
+        return out
 
 

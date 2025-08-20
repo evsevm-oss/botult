@@ -6,6 +6,8 @@
 - MealItemDTO: `name`, `amount`, `unit`, `kcal`, `protein_g`, `fat_g`, `carb_g`, `confidence`
 - MealDTO: `id`, `user_id`, `datetime`, `type`, `items: MealItemDTO[]`, `notes`
 - BudgetsDTO: `kcal`, `protein_g`, `fat_g`, `carb_g`, `source`
+ - WeightDTO: `id`, `user_id`, `date`, `weight_kg`
+ - BodyFatDTO: `id`, `user_id`, `date`, `percent`
 
 ### Ошибки (коды)
 - `E_INVALID_INPUT`
@@ -17,6 +19,8 @@
 - `meal.created` — после подтверждения приема пищи
 - `profile.updated` — при изменении профиля/веса/цели
 - `budgets.recalculated`
+ - `weight.logged` — новое измерение веса
+ - `bodyfat.logged` — новый замер % жира
 
 Форматы ответов REST: `{ "ok": true, "data": … } | { "ok": false, "error": { "code": "…", "message": "…" } }`
 
@@ -56,6 +60,27 @@
 ```
 
 ### Errors
+## Weights API
+
+- GET `/api/weights?start=YYYY-MM-DD&end=YYYY-MM-DD&telegram_id=...` → `{ ok, data: { items: WeightDTO[] } }`
+- POST `/api/weights?telegram_id=...` body `{ date: 'YYYY-MM-DD', weight_kg: number }` → `{ ok, data: { id } }`
+
+## BodyFat API
+
+- POST `/api/bodyfat/estimate?telegram_id=...` body `{ gender, height_cm, weight_kg, waist_cm, neck_cm }` → `{ ok, data: { percent } }`
+- POST `/api/bodyfat?telegram_id=...` body `{ date: 'YYYY-MM-DD', percent: number }` → `{ ok, data: { id } }`
+
+## WebApp Auth
+
+- POST `/api/webapp/verify` body `{ initData: string }` → `{ ok, data: { token, exp } }`
+
+## Summaries/Trends API (для WebApp)
+
+- GET `/api/summary/daily|weekly|monthly?telegram_id=...&...`
+- GET `/api/trends?window=7|30&telegram_id=...`
+- GET `/api/compliance?range=week|month&telegram_id=...`
+- GET `/api/alerts?telegram_id=...`
+- GET `/api/summary/weekly.csv?telegram_id=...`
 - `E_DUPLICATE_MEAL_SOURCE` — нарушение идемпотентности (повторный `update_id`/`chat+message`)
 - `E_VALIDATION` — некорректные значения (массы/БЖУ и др.)
 

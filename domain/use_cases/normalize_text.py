@@ -56,6 +56,36 @@ def parse_text_to_raw_items(text: str) -> List[RawItem]:
     return items
 
 
+def _is_fruit(name_lower: str) -> bool:
+    fruits = [
+        "яблок", "банан", "апельс", "груш", "киви", "персик", "слив",
+        "виноград", "гранат", "грейпфрут", "манго", "ананас", "вишн",
+        "черешн", "клубник", "малина", "ежевик", "голубик", "черник",
+        "абрикос", "дын", "арбуз", "мандарин", "лимон", "лайм", "нектарин",
+    ]
+    return any(tok in name_lower for tok in fruits)
+
+
+def _estimate_macros(name_lower: str, amount_g: float) -> tuple[float, float, float, float]:
+    """Вернуть (kcal, protein_g, fat_g, carb_g) для массы в граммах по простым эвристикам.
+
+    Фрукты (на 100 г): ~52 ккал, Б 0.5 г, Ж 0.2 г, У 13 г.
+    Общий фолбэк: грубое распределение P=15%, F=10%, C=20% от массы.
+    """
+    if _is_fruit(name_lower):
+        kcal = round(0.52 * amount_g, 0)
+        protein_g = round(0.005 * amount_g, 1)
+        fat_g = round(0.002 * amount_g, 1)
+        carb_g = round(0.13 * amount_g, 1)
+        return kcal, protein_g, fat_g, carb_g
+
+    protein_g = round(0.15 * amount_g, 1)
+    fat_g = round(0.10 * amount_g, 1)
+    carb_g = round(0.20 * amount_g, 1)
+    kcal = round(protein_g * 4 + fat_g * 9 + carb_g * 4, 0)
+    return kcal, protein_g, fat_g, carb_g
+
+
 def normalize_items(raw: List[RawItem]) -> List[NormalizedItem]:
     result: List[NormalizedItem] = []
     for it in raw:
@@ -67,23 +97,21 @@ def normalize_items(raw: List[RawItem]) -> List[NormalizedItem]:
         if unit not in {"g", "ml", "piece"}:
             unit = "g"
         amount = it.amount or 100.0
-        # Заглушка нутриентов: 1 г белка/углеводов = 4 ккал, 1 г жира = 9 ккал, распределим грубо
-        protein_g = round(0.15 * amount, 1)
-        fat_g = round(0.10 * amount, 1)
-        carb_g = round(0.20 * amount, 1)
-        kcal = round(protein_g * 4 + fat_g * 9 + carb_g * 4, 0)
+        # Приведём объём к граммам (грубо 1 мл ≈ 1 г)
+        amount_g = amount if unit != "ml" else amount
+        kcal, protein_g, fat_g, carb_g = _estimate_macros(it.name.lower(), amount_g)
         result.append(
             NormalizedItem(
                 name=it.name,
                 category=None,
-                unit=unit,
-                amount=amount,
+                unit="g" if unit in {"g", "ml"} else unit,
+                amount=amount_g if unit in {"g", "ml"} else amount,
                 kcal=kcal,
                 protein_g=protein_g,
                 fat_g=fat_g,
                 carb_g=carb_g,
-                confidence=0.5,
-                assumptions=["evristic-defaults"],
+                confidence=0.7 if _is_fruit(it.name.lower()) else 0.5,
+                assumptions=["evristic-fruit" if _is_fruit(it.name.lower()) else "evristic-defaults"],
             )
         )
     return result

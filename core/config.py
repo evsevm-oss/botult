@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(None, alias="OPENAI_API_KEY")
     openai_tts_voice: str = Field("alloy", alias="OPENAI_TTS_VOICE")
     openai_model_normalize: str = Field("gpt-4o-mini", alias="OPENAI_MODEL_NORMALIZE")
+    openai_cost_input_per_1k: float = Field(0.0005, alias="OPENAI_COST_INPUT_PER_1K")
+    openai_cost_output_per_1k: float = Field(0.0015, alias="OPENAI_COST_OUTPUT_PER_1K")
+    moderation_enabled: bool = Field(True, alias="MODERATION_ENABLED")
     did_api_key: str | None = Field(None, alias="DID_API_KEY")
 
     # Storage / DB / Cache

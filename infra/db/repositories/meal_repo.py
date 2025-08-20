@@ -213,9 +213,17 @@ class MealRepo:
         if autocommit:
             await self.session.commit()
 
-    async def sum_macros_for_date(self, *, user_id: int, on_date: Date) -> dict[str, float]:
-        start = datetime.combine(on_date, datetime.min.time()).astimezone()
-        end = datetime.combine(on_date, datetime.max.time()).astimezone()
+    async def sum_macros_for_date(self, *, user_id: int, on_date: Date, tz: str | None = None) -> dict[str, float]:
+        if tz:
+            from zoneinfo import ZoneInfo
+            z = ZoneInfo(tz)
+            start_local = datetime.combine(on_date, datetime.min.time()).replace(tzinfo=z)
+            end_local = datetime.combine(on_date, datetime.max.time()).replace(tzinfo=z)
+            start = start_local.astimezone(ZoneInfo("UTC"))
+            end = end_local.astimezone(ZoneInfo("UTC"))
+        else:
+            start = datetime.combine(on_date, datetime.min.time()).astimezone()
+            end = datetime.combine(on_date, datetime.max.time()).astimezone()
         from sqlalchemy import func, and_
         from infra.db.models import Meal, MealItem
         res = await self.session.execute(

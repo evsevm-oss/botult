@@ -10,6 +10,8 @@ from aiogram.types import BotCommand
 from core.config import settings
 from bot.routers import make_root_router
 from bot.middlewares.logging import LoggingMiddleware
+from bot.middlewares.trace import TraceMiddleware
+from bot.middlewares.locale import LocaleMiddleware
 
 
 async def main() -> None:
@@ -23,7 +25,9 @@ async def main() -> None:
     token = (settings.telegram_bot_token or "").strip().strip("'").strip('"')
     bot = Bot(token=token)
     dp = Dispatcher(storage=MemoryStorage())
+    dp.update.middleware(TraceMiddleware())
     dp.update.middleware(LoggingMiddleware())
+    dp.update.middleware(LocaleMiddleware())
     dp.include_router(make_root_router())
 
     # Команды бота

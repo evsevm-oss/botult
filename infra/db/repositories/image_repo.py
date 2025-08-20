@@ -62,4 +62,21 @@ class ImageRepo:
             for i in res.scalars().all()
         ]
 
+    async def get_by_ids(self, image_ids: list[int]) -> list[dict[str, Any]]:
+        if not image_ids:
+            return []
+        res = await self.session.execute(select(Image).where(Image.id.in_(image_ids)))
+        return [
+            dict(
+                id=i.id,
+                user_id=i.user_id,
+                object_key=i.object_key,
+                width=i.width,
+                height=i.height,
+                content_type=i.content_type,
+                sha256=i.sha256,
+            )
+            for i in res.scalars().all()
+        ]
+
 

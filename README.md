@@ -199,7 +199,7 @@ if result_url:
 1) На локальной машине (macOS), в корне проекта:
 ```bash
 zip -r -X /tmp/bot.zip . -x '.venv/*' '.git/*' '__pycache__/*' 'node_modules/*'
-scp -o IdentitiesOnly=yes -i ~/.ssh/ovh-vps /tmp/bot.zip debian@<VPS_IP>:/home/debian/
+scp -o IdentitiesOnly=yes -i ~/.ssh/ovh-vps /tmp/bot.zip debian@57.129.75.190:/home/debian/
 ```
 
 2) На VPS:

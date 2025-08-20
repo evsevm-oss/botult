@@ -8,3 +8,9 @@ Telegram API token:
 <PLACEHOLDER_TELEGRAM_BOT_TOKEN>
 
 Храните реальный токен в файле `.env` в переменной `TELEGRAM_BOT_TOKEN`.
+
+### Кнопка WebApp
+
+- Добавьте кнопку с `web_app` в меню/клавиатуру бота для открытия мини‑приложения (см. `bot/keyboards.py`).
+- Передавайте `start_param` для навигации в нужный экран.
+- На сервере реализуйте `POST /api/webapp/verify` для валидации `initData` и выдачи JWT.

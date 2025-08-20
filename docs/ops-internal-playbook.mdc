@@ -1,0 +1,130 @@
+## Внутренняя памятка: быстрый и безошибочный деплой на VPS
+
+Контекст:
+- VPS Debian 12, вход под `debian`, root через `sudo -i`.
+- Код в `/root/calorie-photo-bot`.
+- Сервисы: `ultima-api.service` (FastAPI) и `ultima-bot.service` (aiogram, polling).
+
+Принципы, чтобы не ловить те же грабли:
+- Никогда не тащить `.venv` и `.env` в архив.
+- Всегда пересоздавать venv на VPS после распаковки.
+- Alembic запускать из venv и с `PYTHONPATH` на корень проекта.
+- `.env` держать чистым: по одной строке на переменную, без дублей и CRLF.
+- Все SSH/SCП операции с Mac, не с VPS.
+
+### 1) Mac: сбор и загрузка архива
+```bash
+cd "/Users/evgenii/Проекты/Боты/Бот подсчета калорий по фото"
+zip -r -X ~/calorie-bot.zip . \
+  -x ".git/*" ".venv/*" "venv/*" "__pycache__/*" "*/__pycache__/*" \
+     "*/.venv/*" "node_modules/*" "webapp/node_modules/*" ".DS_Store" ".env"
+
+scp -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -i ~/.ssh/ovh-vps \
+  ~/calorie-bot.zip debian@57.129.75.190:/home/debian/update.zip
+ssh -o IdentitiesOnly=yes -i ~/.ssh/ovh-vps debian@57.129.75.190 'ls -lh /home/debian/update.zip'
+```
+
+### 2) VPS: распаковка и venv
+```bash
+ssh -o IdentitiesOnly=yes -i ~/.ssh/ovh-vps debian@57.129.75.190
+sudo -i
+mkdir -p /root/calorie-photo-bot
+mv /home/debian/update.zip /root/calorie-photo-bot/update.zip
+cd /root/calorie-photo-bot
+apt-get update -y && apt-get install -y unzip python3-venv
+unzip -o update.zip | cat
+
+rm -rf .venv
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+pip install -r requirements.txt
+```
+
+### 3) .env: минимально корректный и без CRLF
+```bash
+# Бэкап и очистка потенциального мусора
+cp .env .env.bak_$(date +%s) 2>/dev/null || true
+sed -i 's/\r$//' .env 2>/dev/null || true
+
+# Обновить/установить строго одну строку DATABASE_URL
+sed -i '/^DATABASE_URL=/d' .env
+echo 'DATABASE_URL=postgresql+asyncpg://ultimabot:UltimaPass12345@127.0.0.1:5432/ultimabot' >> .env
+
+# Нормализовать ALLOWED_ORIGINS
+sed -i 's|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=http://localhost:3000|' .env
+
+# Проверка загрузки переменных
+set -a; source .env; set +a
+echo "DB:$DATABASE_URL"  # должен быть не пустой
+```
+
+### 4) PostgreSQL и миграции Alembic
+```bash
+apt-get install -y postgresql postgresql-contrib
+systemctl enable --now postgresql
+
+# Создать роль/БД при необходимости
+sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='ultimabot'" | grep -q 1 || \
+  sudo -u postgres psql -c "CREATE ROLE ultimabot WITH LOGIN PASSWORD 'UltimaPass12345';"
+sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='ultimabot'" | grep -q 1 || \
+  sudo -u postgres createdb -O ultimabot ultimabot
+
+# Alembic (env.py уже обновлён на async-паттерн)
+export PYTHONPATH=/root/calorie-photo-bot
+/root/calorie-photo-bot/.venv/bin/alembic upgrade head
+```
+
+### 5) systemd юниты и перезапуск
+```bash
+# API (создать при отсутствии)
+test -f /etc/systemd/system/ultima-api.service || cat >/etc/systemd/system/ultima-api.service <<'EOF'
+[Unit]
+Description=Ultima Calories API (FastAPI)
+After=network.target
+[Service]
+Type=simple
+WorkingDirectory=/root/calorie-photo-bot
+EnvironmentFile=/root/calorie-photo-bot/.env
+ExecStart=/root/calorie-photo-bot/.venv/bin/uvicorn infra.api.app:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable --now ultima-api.service
+curl -s http://127.0.0.1:8000/health | cat
+
+# Бот: удалить webhook и запустить только через systemd
+pkill -f "python .*bot/main.py" || true
+curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/deleteWebhook?drop_pending_updates=true" >/dev/null
+systemctl enable --now ultima-bot.service
+sleep 2
+journalctl -u ultima-bot.service -n 80 --no-pager -o cat
+```
+
+### 6) Диагностика типовых проблем
+- Токен: `curl -s https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getMe` должен вернуть ok:true. Если 401/404 — токен пуст/невалиден. Обновите `.env` и перезапустите юнит.
+- DB URL пуст при `source .env` — проверьте CRLF (`sed -i 's/\r$//' .env`) и дубли `DATABASE_URL`.
+- Exec format error — в архив попала `.venv` с macOS. Удалите `.venv` на VPS и пересоберите.
+- Alembic MissingGreenlet — используем уже исправленный `alembic/env.py` (async-паттерн с `connectable.begin()` и `run_sync`).
+- Конфликты поллеров — убейте все ручные процессы, запустить только через systemd.
+
+### 7) TL;DR для повторного обновления кода
+```bash
+# Mac
+cd "/Users/evgenii/Проекты/Боты/Бот подсчета калорий по фото"
+zip -r -X ~/calorie-bot.zip . -x ".git/*" ".venv/*" "venv/*" "*/.venv/*" "__pycache__/*" "*/__pycache__/*" "node_modules/*" "webapp/node_modules/*" ".DS_Store" ".env"
+scp -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -i ~/.ssh/ovh-vps ~/calorie-bot.zip debian@57.129.75.190:/home/debian/update.zip
+
+# VPS
+ssh -o IdentitiesOnly=yes -i ~/.ssh/ovh-vps debian@57.129.75.190
+sudo -i && cd /root/calorie-photo-bot && mv /home/debian/update.zip ./update.zip && unzip -o update.zip | cat \
+  && rm -rf .venv && python3 -m venv .venv && source .venv/bin/activate && python -m pip install -U pip && pip install -r requirements.txt \
+  && sed -i 's/\r$//' .env && export PYTHONPATH=/root/calorie-photo-bot && /root/calorie-photo-bot/.venv/bin/alembic upgrade head \
+  && curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/deleteWebhook?drop_pending_updates=true" >/dev/null \
+  && systemctl restart ultima-api.service && systemctl restart ultima-bot.service \
+  && curl -s http://127.0.0.1:8000/health | cat && journalctl -u ultima-bot.service -n 60 --no-pager -o cat
+```
+

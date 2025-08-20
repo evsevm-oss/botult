@@ -26,4 +26,13 @@ class WeightRepo:
         row = res.first()
         return float(row[0]) if row else None
 
+    async def list_between(self, *, user_id: int, start: date, end: date) -> list[dict]:
+        stmt = (
+            select(Weight.date, Weight.weight_kg)
+            .where(Weight.user_id == user_id, Weight.date >= start, Weight.date <= end)
+            .order_by(Weight.date.asc())
+        )
+        res = await self.session.execute(stmt)
+        return [{"date": d.isoformat(), "weight_kg": float(w)} for d, w in res.all()]
+
 

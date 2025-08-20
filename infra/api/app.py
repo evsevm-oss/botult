@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import hmac
 import hashlib
 from urllib.parse import parse_qsl
+from sqlalchemy import select, func  # global import for query builders
 
 from core.config import settings
 from domain.use_cases import (
@@ -29,6 +30,7 @@ from .schemas import (
     WeightInput,
     NormalizeInput,
     NormalizeResponse,
+    NormalizedItem,
     MealCreate,
     MealUpdate,
     MealOutput,
@@ -42,6 +44,8 @@ from infra.db.repositories.goal_repo import GoalRepo
 from infra.db.repositories.weight_repo import WeightRepo
 from infra.db.repositories.user_settings_repo import UserSettingsRepo
 from infra.cache.redis import redis_client
+from fastapi import Response
+import json as _json
 from services.vision.photo_pipeline import save_photo, PhotoIn
 from services.vision.processing import preprocess_photo
 from services.vision.queue import enqueue as enqueue_vision, VisionTask, get_status as get_vision_status
@@ -444,7 +448,27 @@ def create_app() -> FastAPI:
         xtrace = request.headers.get("X-Trace-Id")
         if xtrace:
             log.bind(trace_id=xtrace).info("normalize_done", took_ms=took_ms)
-        return NormalizeResponse(**out.__dict__)
+        # Convert domain dataclasses to Pydantic models for response validation
+        items = [
+            NormalizedItem(
+                name=i.name,
+                category=i.category,
+                unit=i.unit,
+                amount=i.amount,
+                kcal=i.kcal,
+                protein_g=i.protein_g,
+                fat_g=i.fat_g,
+                carb_g=i.carb_g,
+                confidence=i.confidence,
+                assumptions=i.assumptions,
+            )
+            for i in out.items
+        ]
+        return NormalizeResponse(
+            items=items,
+            needs_clarification=out.needs_clarification,
+            clarifications=out.clarifications,
+        )
 
     # Daily summary
     @app.get("/api/daily-summary", response_model=APIResponse)
@@ -455,6 +479,438 @@ def create_app() -> FastAPI:
         d = D.fromisoformat(date)
         ds = await DailySummaryRepo(session).get_by_user_date(user_id=user_id, on_date=d)
         return APIResponse(ok=True, data=ds)
+
+    # Stage 11: summaries & trends
+    @app.get("/api/summary/daily", response_model=APIResponse)
+    async def summary_daily(telegram_id: int, date: str, tz: str | None = None, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        profiles = ProfileRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        from datetime import date as D
+        d = D.fromisoformat(date)
+        # Cache key
+        key = f"summary:daily:{user_id}:{d.isoformat()}"
+        try:
+            cached = await redis_client.get(key)
+            if cached:
+                import json as _json
+                return APIResponse(ok=True, data=_json.loads(cached))
+        except Exception:
+            pass
+        # Consumed
+        meals = MealRepo(session)
+        sums = await meals.sum_macros_for_date(user_id=user_id, on_date=d, tz=tz)
+        # top food items/categories for the day
+        from sqlalchemy import func, select
+        from infra.db.models import Meal, MealItem
+        from datetime import datetime as DT
+        if tz:
+            from zoneinfo import ZoneInfo
+            z = ZoneInfo(tz)
+            start_local = DT.combine(d, DT.min.time()).replace(tzinfo=z)
+            end_local = DT.combine(d, DT.max.time()).replace(tzinfo=z)
+            start_utc = start_local.astimezone(ZoneInfo("UTC"))
+            end_utc = end_local.astimezone(ZoneInfo("UTC"))
+        else:
+            start_utc = DT.combine(d, DT.min.time()).astimezone()
+            end_utc = DT.combine(d, DT.max.time()).astimezone()
+        q = (
+            select(MealItem.name, func.sum(MealItem.kcal).label("k"))
+            .select_from(MealItem)
+            .join(Meal, Meal.id == MealItem.meal_id)
+            .where(Meal.user_id == user_id, Meal.at >= start_utc, Meal.at <= end_utc)
+            .group_by(MealItem.name)
+            .order_by(func.sum(MealItem.kcal).desc())
+            .limit(5)
+        )
+        top_items = [
+            {"name": r[0], "kcal": float(r[1])} for r in (await session.execute(q)).all()
+        ]
+        # Target from profile
+        prof = await profiles.get_by_user_id(user_id)
+        from domain.calculations import bmr_mifflin, tdee_from_activity, target_kcal_from_goal, distribute_macros
+        if prof:
+            age = 30
+            bmr = bmr_mifflin(prof["sex"], age, float(prof["height_cm"]), float(prof["weight_kg"]))
+            tdee = tdee_from_activity(bmr, prof["activity_level"]) 
+            target_kcal = target_kcal_from_goal(tdee, prof["goal"]) 
+            targets = distribute_macros(weight_kg=float(prof["weight_kg"]), target_kcal=target_kcal)
+        else:
+            targets = None
+        data = {
+            "consumed": sums,
+            "target": targets.__dict__ if targets else None,
+            "delta": {
+                k: (float(sums.get(k, 0.0)) - float(getattr(targets, k))) if targets else None
+                for k in ["kcal", "protein_g", "fat_g", "carb_g"]
+            },
+            "remaining": {
+                k: (float(getattr(targets, k)) - float(sums.get(k, 0.0))) if targets else None
+                for k in ["kcal", "protein_g", "fat_g", "carb_g"]
+            },
+            "top_items": top_items or None,
+        }
+        try:
+            await redis_client.setex(key, 300, _json.dumps(data))
+        except Exception:
+            pass
+        return APIResponse(ok=True, data=data)
+
+    @app.get("/api/summary/weekly", response_model=APIResponse)
+    async def summary_weekly(telegram_id: int, start: str | None = None, tz: str | None = None, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        from datetime import date as D, timedelta
+        if not start:
+            s = D.today() - timedelta(days=6)
+        else:
+            s = D.fromisoformat(start)
+        e = s + timedelta(days=6)
+        repo = DailySummaryRepo(session)
+        # Try cache
+        cache_key = f"summary:weekly:{user_id}:{s.isoformat()}"
+        try:
+            cached = await redis_client.get(cache_key)
+        except Exception:
+            cached = None
+        if cached:
+            return APIResponse(ok=True, data=_json.loads(cached))
+        items = await repo.list_between(user_id=user_id, start=s, end=e)
+        # averages
+        n = max(1, len(items))
+        avg = {
+            "kcal": round(sum(i["kcal"] for i in items) / n, 1) if items else 0.0,
+            "protein_g": round(sum(i["protein_g"] for i in items) / n, 1) if items else 0.0,
+            "fat_g": round(sum(i["fat_g"] for i in items) / n, 1) if items else 0.0,
+            "carb_g": round(sum(i["carb_g"] for i in items) / n, 1) if items else 0.0,
+        }
+        # variance (дисперсия)
+        var = None
+        if items:
+            def _var(seq):
+                m = sum(seq)/len(seq)
+                return round(sum((x-m)**2 for x in seq)/len(seq), 1)
+            var = {
+                "kcal": _var([i["kcal"] for i in items]),
+                "protein_g": _var([i["protein_g"] for i in items]),
+                "fat_g": _var([i["fat_g"] for i in items]),
+                "carb_g": _var([i["carb_g"] for i in items]),
+            }
+        # compliance: within +/-10% of daily target using current profile target
+        profiles = ProfileRepo(session)
+        prof = await profiles.get_by_user_id(user_id)
+        comp = None
+        weight_pace_kg_per_week = None
+        if prof:
+            from domain.calculations import bmr_mifflin, tdee_from_activity, target_kcal_from_goal
+            age = 30
+            bmr = bmr_mifflin(prof["sex"], age, float(prof["height_cm"]), float(prof["weight_kg"]))
+            tdee = tdee_from_activity(bmr, prof["activity_level"]) 
+            target_kcal = target_kcal_from_goal(tdee, prof["goal"]) 
+            lo, hi = 0.9 * target_kcal, 1.1 * target_kcal
+            within = sum(1 for i in items if lo <= i["kcal"] <= hi)
+            comp = {"score": int(100 * within / n), "days_within": within, "total_days": n}
+            # weight pace
+            from infra.db.repositories.weight_repo import WeightRepo
+            wrepo = WeightRepo(session)
+            w = await wrepo.list_between(user_id=user_id, start=s, end=e)
+            if len(w) >= 2:
+                days = (e - s).days or 1
+                weight_pace_kg_per_week = round((w[-1]["weight_kg"] - w[0]["weight_kg"]) / days * 7.0, 2)
+        data = {"items": items, "avg": avg, "variance": var, "compliance": comp, "weight_pace_kg_per_week": weight_pace_kg_per_week}
+        try:
+            await redis_client.setex(cache_key, 300, _json.dumps(data))
+        except Exception:
+            pass
+        return APIResponse(ok=True, data=data)
+
+    @app.get("/api/summary/monthly", response_model=APIResponse)
+    async def summary_monthly(telegram_id: int, month: str | None = None, tz: str | None = None, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        from datetime import date as D, timedelta
+        if month:
+            year, mon = month.split("-")
+            s = D(int(year), int(mon), 1)
+        else:
+            today = D.today()
+            s = D(today.year, today.month, 1)
+        # compute end of month
+        if s.month == 12:
+            e = D(s.year + 1, 1, 1) - timedelta(days=1)
+        else:
+            e = D(s.year, s.month + 1, 1) - timedelta(days=1)
+        repo = DailySummaryRepo(session)
+        # Try cache
+        cache_key = f"summary:monthly:{user_id}:{s.strftime('%Y-%m')}"
+        try:
+            cached = await redis_client.get(cache_key)
+        except Exception:
+            cached = None
+        if cached:
+            return APIResponse(ok=True, data=_json.loads(cached))
+        items = await repo.list_between(user_id=user_id, start=s, end=e)
+        # classify days
+        profiles = ProfileRepo(session)
+        prof = await profiles.get_by_user_id(user_id)
+        classes = None
+        monthly_compliance = None
+        streaks = None
+        if prof:
+            from domain.calculations import bmr_mifflin, tdee_from_activity, target_kcal_from_goal
+            age = 30
+            bmr = bmr_mifflin(prof["sex"], age, float(prof["height_cm"]), float(prof["weight_kg"]))
+            tdee = tdee_from_activity(bmr, prof["activity_level"]) 
+            target_kcal = target_kcal_from_goal(tdee, prof["goal"]) 
+            lo10, hi10 = 0.9 * target_kcal, 1.1 * target_kcal
+            classes = []
+            within_days = 0
+            # sort items by date to compute streaks
+            items_sorted = sorted(items, key=lambda x: x["date"]) if items else []
+            current_streak = 0
+            longest_streak = 0
+            for it in items_sorted:
+                kcal = it["kcal"]
+                if kcal < lo10:
+                    cls = "undereating"
+                elif kcal > hi10:
+                    cls = "overeating"
+                else:
+                    cls = "within"
+                classes.append({"date": it["date"], "class": cls})
+                if cls == "within":
+                    within_days += 1
+                    current_streak += 1
+                    if current_streak > longest_streak:
+                        longest_streak = current_streak
+                else:
+                    current_streak = 0
+            total_days = max(1, len(items_sorted))
+            monthly_compliance = {"score": int(100 * within_days / total_days), "days_within": within_days, "total_days": total_days}
+            streaks = {"longest": int(longest_streak), "current": int(current_streak)}
+        # monthly trends: MA7 and MA30 over kcal
+        kcal_ma7: list[float] = []
+        kcal_ma30: list[float] = []
+        dates: list[str] = []
+        if items:
+            items_sorted = sorted(items, key=lambda x: x["date"])  # ensure order
+            vals = [i["kcal"] for i in items_sorted]
+            dates = [i["date"] for i in items_sorted]
+            for i in range(len(vals)):
+                win7 = vals[max(0, i-6): i+1]
+                win30 = vals[max(0, i-29): i+1]
+                kcal_ma7.append(round(sum(win7)/len(win7), 1) if win7 else 0.0)
+                kcal_ma30.append(round(sum(win30)/len(win30), 1) if win30 else 0.0)
+        data = {
+            "items": items,
+            "classes": classes,
+            "compliance": monthly_compliance,
+            "streaks": streaks,
+            "trends": {"dates": dates or None, "kcal_ma7": kcal_ma7 or None, "kcal_ma30": kcal_ma30 or None},
+        }
+        try:
+            await redis_client.setex(cache_key, 600, _json.dumps(data))
+        except Exception:
+            pass
+        return APIResponse(ok=True, data=data)
+
+    @app.get("/api/trends", response_model=APIResponse)
+    async def trends(telegram_id: int, window: int = 7, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        from datetime import date as D, timedelta
+        e = D.today()
+        s = e - timedelta(days=max(1, window - 1))
+        repo = DailySummaryRepo(session)
+        items = await repo.list_between(user_id=user_id, start=s, end=e)
+        # moving averages (MA7) for kcal
+        ma7 = []
+        vals = [i["kcal"] for i in items]
+        for i in range(len(vals)):
+            win = vals[max(0, i-6):i+1]
+            ma7.append(round(sum(win)/len(win), 1) if win else 0.0)
+        # weight trend and forecast (linear slope) + MA7 & median7 with outlier filter (IQR)
+        wrepo = WeightRepo(session)
+        weights = await wrepo.list_between(user_id=user_id, start=s, end=e)
+        # extract series
+        w_vals = [w["weight_kg"] for w in weights]
+        # IQR filter
+        weights_filtered = weights
+        if len(w_vals) >= 4:
+            sorted_vals = sorted(w_vals)
+            q1 = sorted_vals[len(sorted_vals)//4]
+            q3 = sorted_vals[(len(sorted_vals)*3)//4]
+            iqr = q3 - q1
+            lo = q1 - 1.5 * iqr
+            hi = q3 + 1.5 * iqr
+            weights_filtered = [w for w in weights if lo <= w["weight_kg"] <= hi]
+        # MA7 and median7 on filtered sequence order
+        wf_vals = [w["weight_kg"] for w in weights_filtered]
+        weight_ma7 = []
+        weight_median7 = []
+        for i in range(len(wf_vals)):
+            win = wf_vals[max(0, i-6):i+1]
+            if win:
+                weight_ma7.append(round(sum(win)/len(win), 2))
+                # median
+                sw = sorted(win)
+                m = sw[len(sw)//2] if len(sw) % 2 == 1 else (sw[len(sw)//2 - 1] + sw[len(sw)//2]) / 2
+                weight_median7.append(round(m, 2))
+            else:
+                weight_ma7.append(0.0)
+                weight_median7.append(0.0)
+        weight_forecast_7d = None
+        weight_forecast_ci95 = None
+        if len(weights) >= 2:
+            # Linear regression on day indices
+            import math
+            xs = [i for i in range(len(weights))]
+            ys = [w["weight_kg"] for w in weights]
+            n = len(xs)
+            mean_x = sum(xs) / n
+            mean_y = sum(ys) / n
+            sxx = sum((x - mean_x) ** 2 for x in xs)
+            if sxx == 0:
+                slope = 0.0
+                intercept = ys[-1]
+            else:
+                slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys)) / sxx
+                intercept = mean_y - slope * mean_x
+            x_f = xs[-1] + 7  # forecast 7 days ahead in index units (approx.)
+            y_hat = intercept + slope * x_f
+            weight_forecast_7d = round(y_hat, 2)
+            # 95% CI of prediction
+            if n >= 3 and sxx > 0:
+                residuals = [y - (intercept + slope * x) for x, y in zip(xs, ys)]
+                se = math.sqrt(max(1e-9, sum(r*r for r in residuals) / (n - 2)))
+                s_pred = se * math.sqrt(1 + 1 / n + ((x_f - mean_x) ** 2) / sxx)
+                lo = round(y_hat - 1.96 * s_pred, 2)
+                hi = round(y_hat + 1.96 * s_pred, 2)
+                weight_forecast_ci95 = [lo, hi]
+        return APIResponse(ok=True, data={
+            "items": items,
+            "kcal_ma7": ma7,
+            "weights": weights,
+            "weights_filtered": weights_filtered,
+            "weight_ma7": weight_ma7,
+            "weight_median7": weight_median7,
+            "weight_forecast_7d": weight_forecast_7d,
+            "weight_forecast_ci95": weight_forecast_ci95,
+        })
+
+    @app.get("/api/alerts", response_model=APIResponse)
+    async def alerts(telegram_id: int, range: str = "week", tz: str | None = None, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        from datetime import date as D, timedelta
+        from zoneinfo import ZoneInfo
+        end_d = D.today()
+        start_d = end_d - timedelta(days=6 if range == "week" else 29)
+        # Fetch daily summaries and weights
+        ds_repo = DailySummaryRepo(session)
+        items = await ds_repo.list_between(user_id=user_id, start=start_d, end=end_d)
+        wrepo = WeightRepo(session)
+        weights = await wrepo.list_between(user_id=user_id, start=start_d, end=end_d)
+        # Build expected dates
+        expected = [(start_d + timedelta(days=i)).isoformat() for i in range((end_d - start_d).days + 1)]
+        have = {it["date"]: it for it in items}
+        missing_meal_days = [d for d in expected if d not in have or (have[d]["kcal"] <= 0.0)]
+        # Outliers in kcal (IQR)
+        kcal_vals = [it["kcal"] for it in items if it["kcal"] > 0]
+        kcal_outliers = {"high": [], "low": []}
+        if len(kcal_vals) >= 4:
+            sv = sorted(kcal_vals)
+            q1 = sv[len(sv)//4]
+            q3 = sv[(len(sv)*3)//4]
+            iqr = q3 - q1
+            lo = q1 - 1.5 * iqr
+            hi = q3 + 1.5 * iqr
+            for it in items:
+                if it["kcal"] > hi:
+                    kcal_outliers["high"].append(it["date"])
+                elif it["kcal"] > 0 and it["kcal"] < lo:
+                    kcal_outliers["low"].append(it["date"])
+        # Missing weights
+        weight_dates = {w["date"] for w in weights}
+        missing_weight_days = [d for d in expected if d not in weight_dates]
+        # Nudges
+        nudges: list[dict] = []
+        if missing_weight_days:
+            nudges.append({
+                "code": "WEIGH_IN_REMINDER",
+                "message": "Давно не взвешивались. Добавьте вес за сегодня для более точных прогнозов.",
+                "days_missing": len(missing_weight_days),
+            })
+        if missing_meal_days:
+            nudges.append({
+                "code": "MEAL_LOG_REMINDER",
+                "message": "Есть дни без записей приема пищи. Запишите хотя бы основные блюда.",
+                "days_missing": len(missing_meal_days),
+            })
+        if kcal_outliers["high"]:
+            nudges.append({
+                "code": "HIGH_CAL_OUTLIER",
+                "message": "Замечены дни с заметным перееданием. Проверьте порции и перекусы.",
+                "dates": kcal_outliers["high"],
+            })
+        if kcal_outliers["low"]:
+            nudges.append({
+                "code": "LOW_CAL_OUTLIER",
+                "message": "Некоторые дни выглядят как недоедание. Убедитесь, что это не пропуски записей.",
+                "dates": kcal_outliers["low"],
+            })
+        data = {
+            "range": range,
+            "missing_meal_days": missing_meal_days or None,
+            "missing_weight_days": missing_weight_days or None,
+            "kcal_outliers": kcal_outliers,
+            "nudges": nudges or None,
+        }
+        return APIResponse(ok=True, data=data)
+
+    @app.get("/api/compliance", response_model=APIResponse)
+    async def compliance(telegram_id: int, range: str = "week", session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        from datetime import date as D, timedelta
+        e = D.today()
+        s = e - timedelta(days=6 if range == "week" else 29)
+        repo = DailySummaryRepo(session)
+        items = await repo.list_between(user_id=user_id, start=s, end=e)
+        profiles = ProfileRepo(session)
+        prof = await profiles.get_by_user_id(user_id)
+        score = 0
+        details = []
+        if prof:
+            from domain.calculations import bmr_mifflin, tdee_from_activity, target_kcal_from_goal
+            age = 30
+            bmr = bmr_mifflin(prof["sex"], age, float(prof["height_cm"]), float(prof["weight_kg"]))
+            tdee = tdee_from_activity(bmr, prof["activity_level"]) 
+            target_kcal = target_kcal_from_goal(tdee, prof["goal"]) 
+            lo, hi = 0.9 * target_kcal, 1.1 * target_kcal
+            total = max(1, len(items))
+            within = 0
+            for it in items:
+                kcal = it["kcal"]
+                cls = "within" if lo <= kcal <= hi else ("undereating" if kcal < lo else "overeating")
+                if cls == "within":
+                    within += 1
+                details.append({"date": it["date"], "kcal": kcal, "class": cls})
+            score = int(100 * within / total)
+        return APIResponse(ok=True, data={"score": score, "days": details})
+
+    @app.get("/api/summary/weekly.csv")
+    async def summary_weekly_csv(telegram_id: int, start: str | None = None, session: AsyncSession = Depends(get_session)) -> Response:
+        users = UserRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        from datetime import date as D, timedelta
+        s = D.fromisoformat(start) if start else (D.today() - timedelta(days=6))
+        e = s + timedelta(days=6)
+        repo = DailySummaryRepo(session)
+        items = await repo.list_between(user_id=user_id, start=s, end=e)
+        lines = ["date,kcal,protein_g,fat_g,carb_g"] + [f"{i['date']},{i['kcal']},{i['protein_g']},{i['fat_g']},{i['carb_g']}" for i in items]
+        csv = "\n".join(lines)
+        return Response(content=csv, media_type="text/csv")
 
     # Stage 9: receive photo (raw MVP), store to object storage and index
     @app.post("/api/photos", response_model=APIResponse)

@@ -4,7 +4,7 @@
 - Linux (Debian 12), systemd, Python 3.11+, venv
 - Бот запускается как systemd‑сервис `ultima-bot` (один poller на токен)
 
-### 1) Быстрый релиз кода
+### 1) Быстрый релиз кода (бот + API)
 На локальной машине (macOS):
 ```bash
 zip -r -X /tmp/bot.zip . -x '.venv/*' '.git/*' '__pycache__/*' 'node_modules/*'
@@ -51,4 +51,24 @@ systemctl restart ultima-bot
 ### 5) Один poller по контракту
 - Всегда запускайте бота как systemd‑сервис `ultima-bot`.
 - Не запускайте локально `python -m bot.main` параллельно с сервисом.
+
+### 6) Выкладка WebApp (статические файлы)
+
+Если используется статическая раздача через FastAPI:
+
+1) Собрать фронтенд локально или на сервере:
+```bash
+cd webapp/new_webapp
+npm ci
+npm run build
+```
+В результате появится каталог `dist/`.
+
+2) Скопировать `dist/` в каталог статики сервера (пример для FastAPI `StaticFiles` на `/webapp/`):
+```bash
+rsync -avz webapp/new_webapp/dist/ /root/calorie-photo-bot/static/webapp/
+systemctl restart ultima-api
+```
+
+Если используется Nginx — укажите `root` на каталог сборки и настройте `try_files`, CSP и кэширование.
 

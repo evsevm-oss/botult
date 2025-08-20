@@ -45,15 +45,12 @@ async def on_meal_text(message: Message, state: FSMContext) -> None:
                     for i in items
                 )
                 kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Сохранить", callback_data="meal_save"), InlineKeyboardButton(text="Отменить", callback_data="meal_cancel")], [InlineKeyboardButton(text="Править", callback_data="meal_edit")]])
-                # идемпотентность: запомним update_id входящего текста
-                if message.update_id:
-                    await redis_client.setex(f"seen:update:{message.from_user.id}:{message.update_id}", 86400, "1")
-                await state.set_data({"items": items, "text": text, "source_update_id": message.update_id})
+                # идемпотентность по update_id недоступна в aiogram v3 в объекте Message; используем стандартный поток без отметки
+                await state.set_data({"items": items, "text": text})
                 await state.set_state(AddMealStates.preview)
                 await message.answer(f"Предварительная нормализация:\n{preview}", reply_markup=kb)
         else:
             await message.answer("Сервис нормализации временно недоступен")
-    await state.clear()
 @meal_router.message(F.text)
 async def on_free_text(message: Message, state: FSMContext) -> None:
     # Игнорируем команды

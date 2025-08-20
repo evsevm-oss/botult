@@ -27,4 +27,9 @@ build/
 # Node (for WebApp frontend later)
 node_modules/
 
+# Editor metadata & local artifacts
+.cursor*/
+update.zip
+infra/telegram_web_app_main.jsx
+
 
