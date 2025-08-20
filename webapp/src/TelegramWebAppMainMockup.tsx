@@ -17,6 +17,12 @@ import { apiFetch, getTelegramId } from './auth';
 
 const RootStyles: React.FC = () => (
   <style>{`
+    *,*::before,*::after{box-sizing:border-box}
+    html,body{margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Noto Sans','Apple Color Emoji','Segoe UI Emoji';-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+    img,svg,video,canvas{display:block;max-width:100%}
+    button,input,select,textarea{font:inherit;color:inherit;background:transparent;border:0}
+    #root{isolation:isolate}
     :root {
       --bg: var(--tg-theme-bg-color, #0b1020);
       --text: var(--tg-theme-text-color, #eef2ff);

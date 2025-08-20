@@ -12,6 +12,13 @@
   </head>
   <body>
     <div id="root"></div>
+    <style>
+      /* Critical baseline styles for Telegram WebView */
+      *,*::before,*::after{box-sizing:border-box}
+      html,body{margin:0;padding:0}
+      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,'Noto Sans','Apple Color Emoji','Segoe UI Emoji';-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;background:var(--tg-theme-bg-color,#0b1020);color:var(--tg-theme-text-color,#eef2ff)}
+      #root{isolation:isolate}
+    </style>
     <script type="module" src="/src/main.tsx"></script>
   </body>
   </html>
