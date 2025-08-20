@@ -86,22 +86,53 @@ const RootStyles: React.FC = () => (
     .px-3{padding-left:12px;padding-right:12px}
     .pt-3{padding-top:12px}
     .w-full{width:100%}
+    .w-48{width:192px}
+    .w-64{width:256px}
+    .w-72{width:288px}
     .text-left{text-align:left}
     .truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .text-xs{font-size:12px}
+    .text-sm{font-size:14px}
     .text-lg{font-size:18px}
     .h-5{height:20px}
+    .h-6{height:24px}
     .h-10{height:40px}
     .h-16{height:64px}
     .h-220{height:220px}
     .h-240{height:240px}
     .minh-360{min-height:360px}
+    .min-h-360{min-height:360px}
+    .min-h-\[360px\]{min-height:360px}
+    .h-\[220px\]{height:220px}
+    .h-\[240px\]{height:240px}
     .grid{display:grid}
     .grid-cols-6{grid-template-columns:repeat(6,minmax(0,1fr))}
     .grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .row-grid{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center}
+    .mb-1{margin-bottom:4px}
+    .mb-2{margin-bottom:8px}
+    .mt-auto{margin-top:auto}
+    .self-end{align-self:flex-end}
+    .cursor-pointer{cursor:pointer}
+    .border-l-4{border-left-width:4px}
+    .list-disc{list-style-type:disc}
+    .pl-6{padding-left:24px}
     @media (min-width:960px){.md\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+    /* Tiles grid used in MainInfo */
+    .grid-tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+    .tile-half{grid-column:span 3 / span 3}
+    .tile-row-2{grid-row:span 2 / span 2}
+    @media (min-width:960px){
+      .grid-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}
+      .tile-md-col-1{grid-column:span 1 / span 1}
+      .tile-md-row-1{grid-row:span 1 / span 1}
+    }
+
+    /* Simple spin animation (for Loader2) */
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .animate-spin{animation:spin 1s linear infinite}
 
     /* Modal */
     .modal-root { position: fixed; inset: 0; z-index: 50; }
