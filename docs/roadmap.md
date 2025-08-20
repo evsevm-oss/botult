@@ -147,7 +147,7 @@
   - [x] Перевести `webapp/new_webapp/telegram_web_app_main.jsx` на TypeScript (`.tsx`), устранить типовые ошибки/линт
   - [x] Конфиг сборки (Vite): base=`/webapp/`, `npm ci && npm run build`, вывод в `dist/`
   - [x] Хостинг статических файлов: FastAPI StaticFiles (`/webapp/`), CSP; asset hashing по умолчанию Vite
-- [ ] Аутентификация WebApp
+- [x] Аутентификация WebApp
   - [x] Валидация `initData` Telegram и обмен на короткоживущий JWT (`POST /api/webapp/verify`)
   - [x] Обновление/пролонгация токена, хранение в `localStorage`, выход из аккаунта
 - [ ] Интеграция UI с API/БД
