@@ -218,22 +218,22 @@ const MainInfo: React.FC<MainInfoProps> = ({ values, onEditGoal, onEditCalories,
   <Card>
     <div className="space-y-3">
       {/* Группа 1 */}
-      <div className="grid grid-cols-6 gap-3 md:grid-cols-3 grid-tiles">
+      <div className="grid-tiles">
         {/* Цель */}
-        <button className="metric metric-btn tile-half tile-row-2 tile-md-col-1 tile-md-row-1 flex-col" onClick={onEditGoal} aria-label="Изменить цель">
+        <button className="metric metric-btn tile-half tile-row-2 flex-col" onClick={onEditGoal} aria-label="Изменить цель">
           <div className="subtle text-[12px] mb-1">Цель</div>
           <div className="value-xl">{values.goalTitle}</div>
           {values.goalNote ? <div className="subtle text-xs">{values.goalNote}</div> : null}
           <div className="pill mt-auto self-end">{values.dateRange}</div>
         </button>
         {/* Калории */}
-        <button className="metric metric-btn tile-half tile-md-col-1" onClick={onEditCalories} aria-label="Изменить план калорий">
+        <button className="metric metric-btn tile-half" onClick={onEditCalories} aria-label="Изменить план калорий">
           <div className="subtle text-[12px] mb-1">Калории</div>
           <div className="value-xl mono">{`< ${nf(values.calPlan)} ккал`}</div>
           <div className="pill mt-1">план на день</div>
         </button>
         {/* Протеин */}
-        <button className="metric metric-btn tile-half tile-md-col-1" onClick={onEditProtein} aria-label="Изменить план протеина">
+        <button className="metric metric-btn tile-half" onClick={onEditProtein} aria-label="Изменить план протеина">
           <div className="subtle text-[12px] mb-1">Протеин</div>
           <div className="value-xl mono">{`> ${nf(values.protPlan)} г`}</div>
           <div className="pill mt-1">план на день</div>
@@ -407,7 +407,7 @@ const FoodListWidget: React.FC<{
         <button className="tab" aria-label="Следующий день" onClick={onNext}><ChevronRight size={16} /></button>
       </div>
     }
-    className="min-h-[360px]"
+    className="minh-360"
   >
     <div className="space-y-2">
       {foods.map((f, i) => (
