@@ -1023,7 +1023,7 @@ def create_app() -> FastAPI:
         return APIResponse(ok=True, data={"score": score, "days": details})
 
     @app.get("/api/summary/weekly.csv")
-    async def summary_weekly_csv(telegram_id: int, start: str | None = None, session: AsyncSession = Depends(get_session)) -> Response:
+    async def summary_weekly_csv(telegram_id: int, start: str | None = None, tz: str | None = None, session: AsyncSession = Depends(get_session)) -> Response:
         users = UserRepo(session)
         user_id = await users.get_or_create_by_telegram_id(telegram_id)
         from datetime import date as D, timedelta

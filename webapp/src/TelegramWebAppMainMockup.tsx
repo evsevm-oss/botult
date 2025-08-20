@@ -138,6 +138,24 @@ function Modal(
             {saveLabel}
           </button>
         </div>
+        {/* Фильтры периода и TZ */}
+        <div className="flex items-center gap-2">
+          <div className="tabs">
+            <Chip label="Неделя" active={periodFilter==='week'} onClick={()=>setPeriodFilter('week')} />
+            <Chip label="Месяц" active={periodFilter==='month'} onClick={()=>setPeriodFilter('month')} />
+            <Chip label="Квартал" active={periodFilter==='q'} onClick={()=>setPeriodFilter('q')} />
+            <Chip label="Год" active={periodFilter==='year'} onClick={()=>setPeriodFilter('year')} />
+          </div>
+          <select className="tab" value={tz} onChange={(e)=>setTz(e.target.value)} aria-label="Таймзона">
+            {[
+              'UTC',
+              Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+              'Europe/Moscow','Europe/Kaliningrad','Asia/Yekaterinburg','Asia/Novosibirsk','Asia/Vladivostok'
+            ].filter((v,i,a)=>a.indexOf(v)===i).map(z=> (
+              <option key={z} value={z}>{z}</option>
+            ))}
+          </select>
+        </div>
       </div>
     </div>
   );
@@ -290,6 +308,16 @@ const WeightFatWidget: React.FC<{ initial?: WFPoint[] }> = ({ initial }) => {
         </ResponsiveContainer>
       </div>
     </Card>
+    {/* Экспорт CSV - незаметная кнопка в карточке сводки */}
+    <div className="flex justify-end mt-2">
+      <a
+        className="tab"
+        href={(() => { const tgId = getTelegramId(); const today = new Date(); const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6).toISOString().slice(0,10); return `/api/summary/weekly.csv?telegram_id=${tgId||''}&start=${start}&tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC')}`; })()}
+        download
+      >
+        Скачать CSV
+      </a>
+    </div>
   );
 };
 
@@ -619,6 +647,8 @@ export default function TelegramWebAppMainMockup() {
   // Backend integrations: load weekly summary and meals
   const [weeklySeries, setWeeklySeries] = useState<{ d: string; kcal: number; protein: number }[] | null>(null);
   const [wfSeries, setWfSeries] = useState<WFPoint[] | null>(null);
+  const [periodFilter, setPeriodFilter] = useState<'week'|'month'|'q'|'year'>('week');
+  const [tz, setTz] = useState<string>(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
 
   useEffect(() => {
     const load = async () => {
@@ -627,8 +657,9 @@ export default function TelegramWebAppMainMockup() {
         if (!tgId) { setLoading(false); return; }
         // Weekly summary: use /api/summary/weekly to derive bars; optionally fetch /api/weights for WF graph later
         const today = new Date();
-        const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6).toISOString().slice(0,10);
-        const r1 = await apiFetch(`/api/summary/weekly?telegram_id=${tgId}&start=${start}`);
+        const daySpan = periodFilter==='week' ? 6 : (periodFilter==='month' ? 29 : (periodFilter==='q' ? 89 : 364));
+        const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - daySpan).toISOString().slice(0,10);
+        const r1 = await apiFetch(`/api/summary/weekly?telegram_id=${tgId}&start=${start}&tz=${encodeURIComponent(tz)}`);
         const b1 = await r1.json();
         if (b1?.ok && Array.isArray(b1?.data?.items)) {
           const items = b1.data.items as { date: string; kcal: number; protein_g: number }[];
@@ -645,7 +676,7 @@ export default function TelegramWebAppMainMockup() {
           setWfSeries(wf);
         }
         // Meals for selected date
-        const r2 = await apiFetch(`/api/meals?telegram_id=${tgId}&date=${diaryDateISO}`);
+        const r2 = await apiFetch(`/api/meals?telegram_id=${tgId}&date=${diaryDateISO}&tz=${encodeURIComponent(tz)}`);
         const b2 = await r2.json();
         if (b2?.ok && Array.isArray(b2?.data?.items)) {
           const meals = b2.data.items as any[];
@@ -663,8 +694,8 @@ export default function TelegramWebAppMainMockup() {
       }
     };
     load();
-    // reload meals when date changes
-  }, [diaryDateISO]);
+    // reload when date, period, or tz changes
+  }, [diaryDateISO, periodFilter, tz]);
 
   return (
     <div className="container px-3">
