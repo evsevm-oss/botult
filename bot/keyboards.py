@@ -19,3 +19,16 @@ def main_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def webapp_cta_kb(screen: str | None = None, date_iso: str | None = None) -> InlineKeyboardMarkup:
+    url = settings.webapp_url or ""
+    params = []
+    if screen:
+        params.append(f"screen={screen}")
+    if date_iso:
+        params.append(f"date={date_iso}")
+    if params:
+        sep = '&' if ('?' in url) else '?'
+        url = f"{url}{sep}{'&'.join(params)}"
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть WebApp", web_app={"url": url})]])
+    return kb
+

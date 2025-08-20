@@ -21,14 +21,17 @@ basic_router = Router()
 
 @basic_router.message(CommandStart())
 async def cmd_start(message: Message) -> None:
+    from bot.keyboards import webapp_cta_kb
     await message.answer(
-        "Привет! Я бот‑коуч по питанию (MVP). Доступно: /help, /budget."
+        "Привет! Я бот‑коуч по питанию (MVP). Доступно: /help, /budget.",
+        reply_markup=webapp_cta_kb(screen="dashboard")
     )
 
 
 @basic_router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
-    await message.answer("Доступно: /start, /help, /budget — пример расчёта бюджета.")
+    from bot.keyboards import webapp_cta_kb
+    await message.answer("Доступно: /start, /help, /budget — пример расчёта бюджета.", reply_markup=webapp_cta_kb())
 
 
 @basic_router.message(Command("budget"))

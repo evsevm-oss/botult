@@ -541,7 +541,7 @@ function DevTests() {
 }
 
 export default function TelegramWebAppMainMockup() {
-  const [mbState] = useState<'default'|'disabled'|'loading'>('default');
+  const [mbState, setMbState] = useState<'default'|'disabled'|'loading'>('default');
   const [offline, setOffline] = useState(false);
   const [loading, setLoading] = useState(true);
   
@@ -651,8 +651,20 @@ export default function TelegramWebAppMainMockup() {
   const [tz, setTz] = useState<string>(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
 
   useEffect(() => {
+    // Accessibility: set document title
+    document.title = 'Ultima Calories — Дневник';
+    // Telegram affordances
+    try {
+      const tg: any = (window as any).Telegram?.WebApp;
+      if (tg?.ready) tg.ready();
+      if (tg?.expand) tg.expand();
+    } catch {}
+  }, []);
+
+  useEffect(() => {
     const load = async () => {
       try {
+        setMbState('loading');
         const tgId = getTelegramId();
         if (!tgId) { setLoading(false); return; }
         // Weekly summary: use /api/summary/weekly to derive bars; optionally fetch /api/weights for WF graph later
@@ -691,6 +703,7 @@ export default function TelegramWebAppMainMockup() {
         setOffline(true);
       } finally {
         setLoading(false);
+        setMbState('default');
       }
     };
     load();
