@@ -148,8 +148,8 @@
   - [x] Конфиг сборки (Vite): base=`/webapp/`, `npm ci && npm run build`, вывод в `dist/`
   - [x] Хостинг статических файлов: FastAPI StaticFiles (`/webapp/`), CSP; asset hashing по умолчанию Vite
 - [ ] Аутентификация WebApp
-  - [ ] Валидация `initData` Telegram и обмен на короткоживущий JWT (`POST /api/webapp/verify`)
-  - [ ] Обновление/пролонгация токена, хранение в `localStorage`, выход из аккаунта
+  - [x] Валидация `initData` Telegram и обмен на короткоживущий JWT (`POST /api/webapp/verify`)
+  - [x] Обновление/пролонгация токена, хранение в `localStorage`, выход из аккаунта
 - [ ] Интеграция UI с API/БД
   - [ ] Дашборд: KPI карточки (средние ккал, комплаенс, темп веса), линейные графики, столбики категорий
   - [ ] Данные дневника: `GET/POST/PATCH/DELETE /api/meals`, навигация по датам, модалки редактирования/удаления

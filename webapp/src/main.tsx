@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import TelegramWebAppMainMockup from './TelegramWebAppMainMockup'
+import { ensureAuth } from './auth'
 
 function MealsPage() {
   const [items, setItems] = useState<any[]>([])
@@ -74,10 +75,12 @@ function MealsPage() {
   )
 }
 
-createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <TelegramWebAppMainMockup />
-  </React.StrictMode>
-)
+ensureAuth().finally(() => {
+  createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <TelegramWebAppMainMockup />
+    </React.StrictMode>
+  )
+})
 
 

@@ -73,6 +73,7 @@
 ## WebApp Auth
 
 - POST `/api/webapp/verify` body `{ initData: string }` → `{ ok, data: { token, exp } }`
+- POST `/api/webapp/refresh` body `{ token: string }` → `{ ok, data: { token, exp } } | { ok:false, error:{ code: 'E_BAD_TOKEN' } }`
 
 ## Summaries/Trends API (для WebApp)
 

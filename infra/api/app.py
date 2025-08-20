@@ -457,13 +457,54 @@ def create_app() -> FastAPI:
         return APIResponse(ok=True, data={"deleted": True})
 
     @app.post("/api/webapp/verify", response_model=APIResponse)
-    def webapp_verify(initData: str) -> APIResponse:
+    async def webapp_verify(initData: str, session: AsyncSession = Depends(get_session)) -> APIResponse:
         from core.config import settings as cfg
         if not cfg.telegram_bot_token:
             raise HTTPException(status_code=500, detail="Bot token is not configured")
-        if verify_init_data(initData, cfg.telegram_bot_token):
-            return APIResponse(ok=True, data={"valid": True})
-        return APIResponse(ok=False, error={"code": "E_INVALID_INITDATA", "message": "Invalid initData"})
+        if not verify_init_data(initData, cfg.telegram_bot_token):
+            return APIResponse(ok=False, error={"code": "E_INVALID_INITDATA", "message": "Invalid initData"})
+        # Parse initData to extract user info
+        from urllib.parse import parse_qsl
+        params = dict(parse_qsl(initData, keep_blank_values=True))
+        import json as _json
+        user = None
+        try:
+            if "user" in params:
+                user = _json.loads(params["user"])  # telegram user object
+        except Exception:
+            user = None
+        telegram_id = int((user or {}).get("id") or 0)
+        if telegram_id <= 0:
+            return APIResponse(ok=False, error={"code": "E_NO_USER", "message": "No user in initData"})
+        # Ensure local user exists
+        users = UserRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        # Issue short‑lived JWT
+        import time
+        import jwt
+        now = int(time.time())
+        exp = now + int(settings.webapp_jwt_ttl_minutes) * 60
+        claims = {"sub": str(user_id), "tid": telegram_id, "iat": now, "exp": exp, "scope": "webapp"}
+        token = jwt.encode(claims, settings.webapp_jwt_secret, algorithm="HS256")
+        return APIResponse(ok=True, data={"token": token, "exp": exp})
+
+    @app.post("/api/webapp/refresh", response_model=APIResponse)
+    def webapp_refresh(token: str) -> APIResponse:
+        import jwt
+        from jwt import InvalidTokenError
+        now = int(time.time())
+        try:
+            data = jwt.decode(token, settings.webapp_jwt_secret, algorithms=["HS256"])
+            # Allow refresh only for webapp scope
+            if data.get("scope") != "webapp":
+                raise InvalidTokenError("bad scope")
+            # re-issue new token with shifted exp
+            exp = now + int(settings.webapp_jwt_ttl_minutes) * 60
+            new_claims = {**data, "iat": now, "exp": exp}
+            new_token = jwt.encode(new_claims, settings.webapp_jwt_secret, algorithm="HS256")
+            return APIResponse(ok=True, data={"token": new_token, "exp": exp})
+        except InvalidTokenError:
+            return APIResponse(ok=False, error={"code": "E_BAD_TOKEN", "message": "Invalid token"})
 
     # Stage 7: normalization endpoint (text based MVP)
     @app.post("/api/normalize", response_model=NormalizeResponse)
