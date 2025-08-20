@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -343,6 +343,8 @@ const CaloriesProteinWidget: React.FC<{ weekly?: { d: string; kcal: number; prot
         <div className="chart-labels">
           <span className="pill">План калорий 1950</span>
           <span className="pill">План протеина 120</span>
+          {typeof weeklyCompliance === 'number' && <span className="pill">Комплаенс {weeklyCompliance}%</span>}
+          {typeof weightPace === 'number' && <span className="pill">Темп веса {weightPace} кг/нед</span>}
         </div>
         <ResponsiveContainer>
           <BarChart data={series} margin={{ left: 8, right: 8, top: 8, bottom: 0 }} barCategoryGap="28%">
@@ -373,7 +375,7 @@ const CaloriesProteinWidget: React.FC<{ weekly?: { d: string; kcal: number; prot
   );
 };
 
-interface Food { name: string; kcal: number; protein?: number; weight?: number; }
+interface Food { name: string; kcal: number; protein?: number; weight?: number; mealId?: number; itemId?: number; unit?: string; fat_g?: number; carb_g?: number; }
 
 const FoodListWidget: React.FC<{
   dateISO: string;
@@ -635,10 +637,50 @@ export default function TelegramWebAppMainMockup() {
   const [tmpFoodProtein, setTmpFoodProtein] = useState<string>('0');
   const [tmpFoodKcal, setTmpFoodKcal] = useState<string>('0');
   const openFoodEdit = (i: number) => { const f = foodList[i]; if (!f) return; setEditIndex(i); setTmpFoodName(f.name); setTmpFoodWeight(String(f.weight ?? 0)); setTmpFoodProtein(String(f.protein ?? 0)); setTmpFoodKcal(String(f.kcal)); setModal({ type: 'food-edit' }); };
-  const saveFoodEdit = () => { if (editIndex < 0) return close(); setFoodList(list => list.map((f, idx) => idx === editIndex ? ({ ...f, name: tmpFoodName.trim() || f.name, weight: Number(tmpFoodWeight)||0, protein: Number(tmpFoodProtein)||0, kcal: Number(tmpFoodKcal)||f.kcal }) : f)); close(); };
+  const saveFoodEdit = async () => {
+    if (editIndex < 0) return close();
+    const edited = foodList[editIndex];
+    if (!edited?.mealId) { close(); return; }
+    const tgId = getTelegramId();
+    if (!tgId) { close(); return; }
+    const updatedItem: Food = {
+      ...edited,
+      name: tmpFoodName.trim() || edited.name,
+      weight: Number(tmpFoodWeight)||0,
+      protein: Number(tmpFoodProtein)||0,
+      kcal: Number(tmpFoodKcal)||Number(edited.kcal||0),
+    };
+    const itemsForMeal = foodList.filter(x => x.mealId === edited.mealId).map(x => ({
+      name: x === edited ? updatedItem.name : x.name,
+      unit: x.unit || 'g',
+      amount: x === edited ? (updatedItem.weight||0) : (x.weight||0),
+      kcal: x === edited ? (updatedItem.kcal||0) : (x.kcal||0),
+      protein_g: x === edited ? (updatedItem.protein||0) : (x.protein||0),
+      fat_g: x.fat_g || 0,
+      carb_g: x.carb_g || 0,
+    }));
+    await apiFetch(`/api/meals/${edited.mealId}?telegram_id=${tgId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: itemsForMeal }) });
+    close();
+    await fetchAll();
+  };
   const [deleteIndex, setDeleteIndex] = useState<number>(-1);
   const openFoodDelete = (i: number) => { setDeleteIndex(i); setModal({ type: 'food-del' }); };
-  const confirmFoodDelete = () => { if (deleteIndex>=0) setFoodList(list => list.filter((_, idx) => idx !== deleteIndex)); close(); };
+  const confirmFoodDelete = async () => {
+    if (deleteIndex<0) { close(); return; }
+    const del = foodList[deleteIndex];
+    if (!del?.mealId) { close(); return; }
+    const tgId = getTelegramId();
+    if (!tgId) { close(); return; }
+    const remaining = foodList.filter(x => x.mealId === del.mealId && x.itemId !== del.itemId);
+    if (remaining.length === 0) {
+      await apiFetch(`/api/meals/${del.mealId}?telegram_id=${tgId}`, { method: 'DELETE' });
+    } else {
+      const items = remaining.map(x => ({ name: x.name, unit: x.unit || 'g', amount: x.weight||0, kcal: x.kcal||0, protein_g: x.protein||0, fat_g: x.fat_g||0, carb_g: x.carb_g||0 }));
+      await apiFetch(`/api/meals/${del.mealId}?telegram_id=${tgId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) });
+    }
+    close();
+    await fetchAll();
+  };
 
   const kcalToday = useMemo(() => foodList.reduce((s, f) => s + (Number(f.kcal)||0), 0), [foodList]);
   const values = { goalTitle, goalNote, dateRange, calPlan, protPlan, weight, weightDelta, fatPct, fatDelta };
@@ -646,6 +688,8 @@ export default function TelegramWebAppMainMockup() {
 
   // Backend integrations: load weekly summary and meals
   const [weeklySeries, setWeeklySeries] = useState<{ d: string; kcal: number; protein: number }[] | null>(null);
+  const [weeklyCompliance, setWeeklyCompliance] = useState<number | null>(null);
+  const [weightPace, setWeightPace] = useState<number | null>(null);
   const [wfSeries, setWfSeries] = useState<WFPoint[] | null>(null);
   const [periodFilter, setPeriodFilter] = useState<'week'|'month'|'q'|'year'>('week');
   const [tz, setTz] = useState<string>(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
@@ -661,8 +705,7 @@ export default function TelegramWebAppMainMockup() {
     } catch {}
   }, []);
 
-  useEffect(() => {
-    const load = async () => {
+  const fetchAll = useCallback(async () => {
       try {
         setMbState('loading');
         const tgId = getTelegramId();
@@ -677,6 +720,8 @@ export default function TelegramWebAppMainMockup() {
           const items = b1.data.items as { date: string; kcal: number; protein_g: number }[];
           const ser = items.map(it => ({ d: it.date.slice(5), kcal: Number(it.kcal||0), protein: Number(it.protein_g||0) }));
           setWeeklySeries(ser);
+          setWeeklyCompliance((b1.data.compliance && b1.data.compliance.score) || null);
+          setWeightPace((b1.data.weight_pace_kg_per_week != null) ? Number(b1.data.weight_pace_kg_per_week) : null);
         }
         // Optionally, fetch weights to populate WF graph
         const r3 = await apiFetch(`/api/weights?telegram_id=${tgId}&start=${start}`);
@@ -693,8 +738,8 @@ export default function TelegramWebAppMainMockup() {
         if (b2?.ok && Array.isArray(b2?.data?.items)) {
           const meals = b2.data.items as any[];
           const list: Food[] = [];
-          meals.forEach(m => {
-            (m.items || []).forEach((it: any) => list.push({ name: it.name, kcal: Number(it.kcal||0), protein: Number(it.protein_g||0), weight: Number(it.amount||0) }));
+          meals.forEach((m: any) => {
+            (m.items || []).forEach((it: any) => list.push({ name: it.name, kcal: Number(it.kcal||0), protein: Number(it.protein_g||0), weight: Number(it.amount||0), mealId: m.id, itemId: it.id, unit: it.unit || 'g', fat_g: Number(it.fat_g||0), carb_g: Number(it.carb_g||0) }));
           });
           if (list.length) setFoodList(list);
         }
@@ -705,10 +750,9 @@ export default function TelegramWebAppMainMockup() {
         setLoading(false);
         setMbState('default');
       }
-    };
-    load();
-    // reload when date, period, or tz changes
-  }, [diaryDateISO, periodFilter, tz]);
+    }, [diaryDateISO, periodFilter, tz]);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   return (
     <div className="container px-3">
