@@ -422,7 +422,7 @@ const FoodListWidget: React.FC<{
   >
     <div className="space-y-2">
       {foods.map((f, i) => (
-        <div key={i} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center py-2 px-2 rounded-md hover:bg-white/5">
+        <div key={i} className="row-grid gap-2 items-center py-2 px-2 rounded-md">
           <button className="text-left truncate pr-3" title={f.name} onClick={() => onItemClick(i)} aria-label={`Изменить ${f.name}`}>
             {f.name}
           </button>
@@ -440,9 +440,10 @@ const FoodListWidget: React.FC<{
 const MainButtonDock: React.FC<{ state: 'default'|'disabled'|'loading', label: string, onClick?: () => void }>
   = ({ state, label, onClick }) => (
   <div
-    className="fixed left-0 right-0 bottom-0 px-3 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] pt-3 main-gradient"
+    className="fixed left-0 right-0 bottom-0 px-3 pt-3 main-gradient"
     role="region"
     aria-label="MainButton dock"
+    style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}
   >
     <button
       className="btn btn-primary w-full shadow-xl flex items-center justify-center gap-2"
