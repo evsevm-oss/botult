@@ -5,7 +5,7 @@ import logging
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import BotCommand
+from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
 
 from core.config import settings
 from bot.routers import make_root_router
@@ -43,6 +43,15 @@ async def main() -> None:
             BotCommand(command="settings", description="Настройки"),
         ]
     )
+
+    # Постоянная кнопка WebApp в меню бота (только HTTPS)
+    if settings.webapp_url and str(settings.webapp_url).startswith("https://"):
+        try:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(text="Открыть WebApp", web_app=WebAppInfo(url=str(settings.webapp_url)))
+            )
+        except Exception:
+            pass
 
     # Поллинг без вебхуков для простого запуска на VPS
     await bot.delete_webhook(drop_pending_updates=True)
