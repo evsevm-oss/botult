@@ -110,6 +110,17 @@ const RootStyles: React.FC = () => (
     .field { display:flex; flex-direction:column; gap:6px; margin-top:10px; }
     .input { width:100%; height:40px; border-radius: 10px; background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); padding: 0 10px; color: var(--text); }
     .modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
+
+    /* Extra utility aliases used in markup */
+    .space-y-3 > * + * { margin-top: 12px; }
+    .rounded { border-radius: 8px; }
+    .rounded-md { border-radius: 12px; }
+    .rounded-lg { border-radius: 16px; }
+    .mt-2 { margin-top: 8px; }
+    .grid-cols-1 { grid-template-columns: repeat(1, minmax(0,1fr)); }
+    .grid-cols-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    @media (min-width: 640px) { .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+    .text-\[12px\] { font-size: 12px; }
   `}</style>
 );
 
