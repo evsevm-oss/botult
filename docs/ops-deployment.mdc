@@ -1,3 +1,30 @@
+## WebApp: сборка и выкладка (MVP)
+
+### Сборка фронтенда
+1. Установите Node.js 20+
+2. Выполните:
+```bash
+cd webapp
+npm ci
+npm run build
+```
+Артефакты появятся в `webapp/dist/`.
+
+### Сервер (FastAPI)
+- Статика монтируется на `/webapp` автоматически, если `webapp/dist` существует (см. `infra/api/app.py`).
+- Запуск:
+```bash
+uvicorn infra.api.app:app --host 0.0.0.0 --port 8000
+```
+- Открыть: `http://<host>:8000/webapp/`
+
+### Telegram Mini App
+- В BotFather задайте `WEBAPP_URL` на `https://<host>/webapp/` (или локально на `http://.../webapp/` при прокси)
+- Кнопка `web_app` доступна в боте (см. `bot/keyboards.py`).
+
+### CSP/безопасность
+- CSP и security заголовки применяются для `/webapp` (см. middleware в `infra/api/app.py`).
+
 ## Операционный гайд: деплой и обновление бота на VPS
 
 ### 0) Предварительные условия

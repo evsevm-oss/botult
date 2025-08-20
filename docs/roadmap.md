@@ -167,11 +167,11 @@
   - [x] Локализация RU как дефолт (базовые тексты RU; i18n позже)
 - [x] Рассылки
   - [x] Недельные дайджесты (текст + CTA WebApp), персонализация по данным сводок — `POST /api/digest/weekly/send`
-- [ ] Документация и DevOps
-  - [ ] Обновить `docs/webapps-architecture.mdc` (экраны/потоки/безопасность)
-  - [ ] Обновить `docs/contracts.mdc` (эндпоинты WebApp, auth, сводки/тренды)
-  - [ ] Обновить `docs/ops-deployment.mdc` и `docs/ops-update-quick.mdc` (сборка и выкладка WebApp)
-  - [ ] Добавить гайд `docs/webapp_rules.mdc` (UI‑правила, состояние, интеграция)
+- [x] Документация и DevOps
+  - [x] Обновить `docs/webapps-architecture.mdc` (экраны/потоки/безопасность)
+  - [x] Обновить `docs/contracts.mdc` (эндпоинты WebApp, auth, сводки/тренды)
+  - [x] Обновить `docs/ops-deployment.mdc` и `docs/ops-update-quick.mdc` (сборка и выкладка WebApp)
+  - [x] Обновить `docs/webapp_rules.mdc` (UI‑правила, состояние, интеграция)
 
 ## Этап 13. Настройки и персонализация
 - [ ] Единицы измерения (кг/фунты, мл/унции), часовой пояс/TZ, локаль

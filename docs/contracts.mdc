@@ -75,6 +75,10 @@
 - POST `/api/webapp/verify` body `{ initData: string }` → `{ ok, data: { token, exp } }`
 - POST `/api/webapp/refresh` body `{ token: string }` → `{ ok, data: { token, exp } } | { ok:false, error:{ code: 'E_BAD_TOKEN' } }`
 
+## Digest API
+
+- POST `/api/digest/weekly/send?secret=...` → `{ ok, data: { sent } }` — рассылает недельный дайджест всем пользователям (MVP)
+
 ## Summaries/Trends API (для WebApp)
 
 - GET `/api/summary/daily|weekly|monthly?telegram_id=...&...`

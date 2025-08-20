@@ -3,12 +3,13 @@
 ### Поток аутентификации
 1) Telegram Mini App загружается внутри клиента Telegram → `initData`
 2) Бэкенд валидирует подпись `initData` (секрет бота), извлекает `user`/`chat`/`start_param`
-3) Выдаёт короткоживущий токен WebApp (JWT) → используется для REST/WS запросов
+3) Выдаёт короткоживущий токен WebApp (JWT) → используется для REST/WS запросов (`POST /api/webapp/verify`, `POST /api/webapp/refresh`)
 
 ### Клиент
-- React/Vite (или Next) → рендер страниц дневника/профиля/графиков. Макет реализован в `webapp/new_webapp/telegram_web_app_main.jsx` (план: перенос на TypeScript `.tsx`).
-- Хранение состояния в LocalStorage/IndexedDB, синхронизация с API бэкенда. Отображение скелетонов, офлайн‑режим и обработка ошибок.
-- Основные виджеты: верхние KPI плитки (цель, калории, протеин, вес, % жира), график веса/% жира с периодами (неделя/месяц/квартал/год), потребление калорий/протеина, дневник с CRUD и навигацией по датам.
+- React/Vite → `webapp/src/TelegramWebAppMainMockup.tsx` (TypeScript)
+- Auth: `ensureAuth()` читает `initData`, запрашивает JWT и авто‑пролонгирует; `apiFetch()` добавляет `Authorization`
+- Хранение состояния в LocalStorage, скелетоны и офлайн‑статус, aria‑атрибуты
+- Виджеты: KPI (цель/калории/протеин/вес/жир), графики (вес/%жира, калории/протеин), дневник с навигацией по датам
 
 ### Серверные эндпоинты (минимум)
 - `GET /api/me/summary` — дневные бюджеты и сводка
@@ -28,11 +29,11 @@
 
 ### Хостинг и деплой WebApp
 - Сборка фронтенда: `npm ci && npm run build` → `dist/`
-- Раздача статики: FastAPI `StaticFiles` по `/webapp/` или прокси через Nginx (CSP, gzip, cache headers)
-- Версионирование ассетов (hash) и корректные пути для Telegram клиента
+- Раздача статики: FastAPI `StaticFiles` по `/webapp/` (см. `infra/api/app.py`), CSP заголовки для Mini App
+- Vite `base: '/webapp/'`, asset hashing по умолчанию
 
 ### Навигация из бота
-- Кнопка `web_app` и deeplink из сообщений/рассылок (CTA), поддержка `start_param`
+- Кнопка `web_app` и deeplink из сообщений/рассылок (CTA), поддержка параметров `screen/date`
 
 ### Безопасность
 - Проверка подписи `initData`, ограничение CORS, короткие TTL токена, ограничение происхождения загрузки (Telegram)

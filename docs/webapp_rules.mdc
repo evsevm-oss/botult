@@ -23,9 +23,9 @@
 - Офлайн: показывать баннер «Нет подключения», блокировать изменения, кешировать последний вид.
 
 ### Front сборка/деплой
-- Проект: React + Vite (TypeScript), линтинг ESLint + Prettier; алиасы импортов.
-- Сборка: `npm ci && npm run build` → `dist/`; статическая раздача `/webapp/`.
-- CSP: закрыть источники, ограничить загрузку только из Telegram и своего домена/API.
+- Проект: React + Vite (TypeScript); сборка `npm ci && npm run build` → `dist/`.
+- Статика: FastAPI `StaticFiles` по `/webapp/`, Vite `base: '/webapp/'`.
+- CSP: ограничить источники, разрешить Telegram `*.telegram.org` и собственный домен/API.
 
 ### Будущее расширение
 - Локализация (i18n), тёмная/светлая темы через Telegram Theme Params.
