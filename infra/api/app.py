@@ -18,7 +18,7 @@ from domain.use_cases import (
 )
 from infra.db.session import get_session
 from infra.db.repositories.daily_summary_repo import DailySummaryRepo
-from fastapi import Depends, Request
+from fastapi import Depends, Request, Body
 import time
 import structlog
 from zoneinfo import ZoneInfo
@@ -457,7 +457,7 @@ def create_app() -> FastAPI:
         return APIResponse(ok=True, data={"deleted": True})
 
     @app.post("/api/webapp/verify", response_model=APIResponse)
-    async def webapp_verify(initData: str, session: AsyncSession = Depends(get_session)) -> APIResponse:
+    async def webapp_verify(initData: str = Body(..., embed=True), session: AsyncSession = Depends(get_session)) -> APIResponse:
         from core.config import settings as cfg
         if not cfg.telegram_bot_token:
             raise HTTPException(status_code=500, detail="Bot token is not configured")
@@ -489,9 +489,9 @@ def create_app() -> FastAPI:
         return APIResponse(ok=True, data={"token": token, "exp": exp})
 
     @app.post("/api/webapp/refresh", response_model=APIResponse)
-    def webapp_refresh(token: str) -> APIResponse:
+    def webapp_refresh(token: str = Body(..., embed=True)) -> APIResponse:
         import jwt
-        from jwt import InvalidTokenError
+        from jwt.exceptions import InvalidTokenError
         now = int(time.time())
         try:
             data = jwt.decode(token, settings.webapp_jwt_secret, algorithms=["HS256"])
