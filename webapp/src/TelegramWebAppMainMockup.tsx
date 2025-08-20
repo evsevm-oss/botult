@@ -175,24 +175,6 @@ function Modal(
             {saveLabel}
           </button>
         </div>
-        {/* Фильтры периода и TZ */}
-        <div className="flex items-center gap-2">
-          <div className="tabs">
-            <Chip label="Неделя" active={periodFilter==='week'} onClick={()=>setPeriodFilter('week')} />
-            <Chip label="Месяц" active={periodFilter==='month'} onClick={()=>setPeriodFilter('month')} />
-            <Chip label="Квартал" active={periodFilter==='q'} onClick={()=>setPeriodFilter('q')} />
-            <Chip label="Год" active={periodFilter==='year'} onClick={()=>setPeriodFilter('year')} />
-          </div>
-          <select className="tab" value={tz} onChange={(e)=>setTz(e.target.value)} aria-label="Таймзона">
-            {[
-              'UTC',
-              Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-              'Europe/Moscow','Europe/Kaliningrad','Asia/Yekaterinburg','Asia/Novosibirsk','Asia/Vladivostok'
-            ].filter((v,i,a)=>a.indexOf(v)===i).map(z=> (
-              <option key={z} value={z}>{z}</option>
-            ))}
-          </select>
-        </div>
       </div>
     </div>
   );
@@ -330,7 +312,7 @@ const WeightFatWidget: React.FC<{ initial?: WFPoint[] }> = ({ initial }) => {
         </div>
       }
     >
-      <div className="h-220" style={{ width: '100%' }}>
+      <div style={{ width: '100%', height: 220 }}>
         <ResponsiveContainer>
           <LineChart data={data} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
             <CartesianGrid stroke="var(--chart-grid)" />
@@ -366,7 +348,7 @@ const CaloriesProteinWidget: React.FC<{ weekly?: { d: string; kcal: number; prot
 
   return (
     <Card title="Потребление калорий и протеина" className="mb-3">
-      <div className="chart-wrap h-240" style={{ width: '100%' }}>
+      <div className="chart-wrap" style={{ width: '100%', height: 240 }}>
         <div className="chart-labels">
           <span className="pill">План калорий 1950</span>
           <span className="pill">План протеина 120</span>
