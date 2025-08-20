@@ -143,10 +143,10 @@
 - [ ] WebApp — вынесено в отдельный Этап 12 (см. ниже)
 
 ## Этап 12. WebApp: интеграция и запуск
-- [ ] Архитектура и сборка
-  - [ ] Перевести `webapp/new_webapp/telegram_web_app_main.jsx` на TypeScript (`.tsx`), устранить типовые ошибки/линт
-  - [ ] Конфиг сборки (Vite/Next): `npm ci && npm run build`, вывод в `dist/`
-  - [ ] Хостинг статических файлов: FastAPI StaticFiles (`/webapp/`) или Nginx; корректная CSP/asset hashing
+- [x] Архитектура и сборка
+  - [x] Перевести `webapp/new_webapp/telegram_web_app_main.jsx` на TypeScript (`.tsx`), устранить типовые ошибки/линт
+  - [x] Конфиг сборки (Vite): base=`/webapp/`, `npm ci && npm run build`, вывод в `dist/`
+  - [x] Хостинг статических файлов: FastAPI StaticFiles (`/webapp/`), CSP; asset hashing по умолчанию Vite
 - [ ] Аутентификация WebApp
   - [ ] Валидация `initData` Telegram и обмен на короткоживущий JWT (`POST /api/webapp/verify`)
   - [ ] Обновление/пролонгация токена, хранение в `localStorage`, выход из аккаунта

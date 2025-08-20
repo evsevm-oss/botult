@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
 import hmac
 import hashlib
@@ -64,6 +66,36 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Serve built WebApp (Vite) if present
+    try:
+        project_root = Path(__file__).resolve().parents[2]
+        webapp_dist = project_root / "webapp" / "dist"
+        if webapp_dist.exists():
+            app.mount("/webapp", StaticFiles(directory=str(webapp_dist), html=True), name="webapp")
+    except Exception:
+        # optional mount; ignore failures
+        pass
+
+    @app.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        response = await call_next(request)
+        # Apply CSP for WebApp pages only
+        if str(request.url.path).startswith("/webapp"):
+            csp = (
+                "default-src 'self'; "
+                "img-src 'self' data: blob: https://*.telegram.org; "
+                "script-src 'self' 'unsafe-inline' https://telegram.org https://*.telegram.org; "
+                "style-src 'self' 'unsafe-inline'; "
+                "connect-src 'self' https://*.telegram.org; "
+                "font-src 'self' data:; "
+                "object-src 'none'"
+            )
+            response.headers["Content-Security-Policy"] = csp
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["Referrer-Policy"] = "no-referrer"
+            response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        return response
 
     @app.get("/health")
     def health() -> dict[str, str]:
