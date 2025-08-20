@@ -12,18 +12,18 @@ def main_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="Статистика", callback_data="stats:open")],
         [InlineKeyboardButton(text="Настройки", callback_data="settings:open")],
     ]
-    if settings.webapp_url:
+    if settings.webapp_url and str(settings.webapp_url).startswith("https://"):
         buttons.append([
             InlineKeyboardButton(text="Открыть WebApp", web_app={"url": settings.webapp_url})
         ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def webapp_cta_kb(screen: str | None = None, date_iso: str | None = None) -> InlineKeyboardMarkup:
+def webapp_cta_kb(screen: str | None = None, date_iso: str | None = None) -> InlineKeyboardMarkup | None:
     base = (settings.webapp_url or "").strip()
-    # Если URL пустой/некорректный — вернуть пустую клавиатуру, чтобы не падать на стороне Telegram
-    if not base or ("://" not in base):
-        return InlineKeyboardMarkup(inline_keyboard=[])
+    # Требуем HTTPS для Telegram WebApp, иначе не возвращаем клавиатуру вовсе
+    if not base or (not base.startswith("https://")):
+        return None
     url = base
     params = []
     if screen:
