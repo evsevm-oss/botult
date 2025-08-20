@@ -55,6 +55,7 @@ from services.vision.processing import preprocess_photo
 from services.vision.queue import enqueue as enqueue_vision, VisionTask, get_status as get_vision_status
 from infra.db.repositories.image_repo import ImageRepo
 from infra.cache.redis import redis_client as _redis
+from aiogram import Bot as TgBot
 
 
 def create_app() -> FastAPI:
@@ -990,6 +991,66 @@ def create_app() -> FastAPI:
             "nudges": nudges or None,
         }
         return APIResponse(ok=True, data=data)
+
+    # Weekly digest broadcast (MVP): builds per-user summary and sends Telegram messages with CTA to WebApp
+    @app.post("/api/digest/weekly/send", response_model=APIResponse)
+    async def send_weekly_digest(secret: str, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        # Simple shared-secret guard (can move to env/config)
+        if secret != (settings.webapp_jwt_secret or ""):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        # Select all users
+        users = UserRepo(session)
+        from sqlalchemy import select
+        from infra.db.models import User as UserModel
+        res = await session.execute(select(UserModel.id, UserModel.telegram_id))
+        rows = res.all()
+        # Compose bot
+        if not settings.telegram_bot_token:
+            raise HTTPException(status_code=500, detail="Bot token is not configured")
+        bot = TgBot(settings.telegram_bot_token)
+        sent = 0
+        for uid, tg_id in rows:
+            try:
+                # Weekly summary for each user
+                from datetime import date as D, timedelta
+                start = D.today() - timedelta(days=6)
+                repo = DailySummaryRepo(session)
+                items = await repo.list_between(user_id=uid, start=start, end=D.today())
+                n = max(1, len(items))
+                kcal_avg = round(sum(i["kcal"] for i in items) / n, 0) if items else 0
+                # compliance score via existing endpoint logic (reuse minimal calc)
+                comp = None
+                try:
+                    profiles = ProfileRepo(session)
+                    prof = await profiles.get_by_user_id(uid)
+                    if prof:
+                        from domain.calculations import bmr_mifflin, tdee_from_activity, target_kcal_from_goal
+                        age = 30
+                        bmr = bmr_mifflin(prof["sex"], age, float(prof["height_cm"]), float(prof["weight_kg"]))
+                        tdee = tdee_from_activity(bmr, prof["activity_level"]) 
+                        target_kcal = target_kcal_from_goal(tdee, prof["goal"]) 
+                        lo, hi = 0.9 * target_kcal, 1.1 * target_kcal
+                        within = sum(1 for i in items if lo <= i["kcal"] <= hi)
+                        comp = int(100 * within / n)
+                except Exception:
+                    comp = None
+                # Build message
+                text = (
+                    "Ваш недельный дайджест:\n"
+                    f"Средние калории: {int(kcal_avg)} ккал/день\n"
+                    + (f"Комплаенс: {comp}% дней в цели\n" if comp is not None else "")
+                    + "Откройте WebApp для подробностей."
+                )
+                # WebApp CTA
+                web_url = settings.webapp_url or ""
+                kb = {
+                    "inline_keyboard": [[{"text": "Открыть WebApp", "web_app": {"url": web_url}}]]
+                }
+                await bot.send_message(chat_id=int(tg_id), text=text, reply_markup=kb)
+                sent += 1
+            except Exception:
+                pass
+        return APIResponse(ok=True, data={"sent": sent})
 
     @app.get("/api/compliance", response_model=APIResponse)
     async def compliance(telegram_id: int, range: str = "week", session: AsyncSession = Depends(get_session)) -> APIResponse:
