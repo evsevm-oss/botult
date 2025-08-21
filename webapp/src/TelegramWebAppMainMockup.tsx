@@ -72,6 +72,7 @@ const RootStyles: React.FC = () => (
     .metric-btn:focus { outline: 2px solid rgba(109,40,217,0.65); outline-offset: 2px; }
     .value-xl { font-size: 20px; font-weight: 700; }
     .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.16); color: var(--muted); font-size: 12px; line-height: 18px; white-space: nowrap; background: rgba(255,255,255,0.04); max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+    .pill-wrap{white-space:normal;display:inline-flex;flex-direction:column;align-items:flex-end;line-height:1.2}
     .mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
     .shadow-xl { box-shadow: 0 10px 30px rgba(16,24,40,0.35); }
     .main-gradient { background: radial-gradient(1200px 400px at 50% -10%, rgba(99,102,241,0.25), transparent), radial-gradient(800px 300px at 0% 10%, rgba(147,51,234,0.15), transparent), radial-gradient(800px 300px at 100% 10%, rgba(56,189,248,0.12), transparent); }
@@ -283,7 +284,18 @@ const MainInfo: React.FC<MainInfoProps> = ({ values, onEditGoal, onEditCalories,
           <div className="subtle text-[12px] mb-1">Цель</div>
           <div className="value-xl">{values.goalTitle}</div>
           {values.goalNote ? <div className="subtle text-xs">{values.goalNote}</div> : null}
-          <div className="pill mt-auto self-end" title={values.dateRange} style={{maxWidth:'100%'}}>{values.dateRange}</div>
+          {values.dateRange && (
+            <div className="pill pill-wrap mt-auto self-end" title={values.dateRange}>
+              {values.dateRange.includes('–') ? (
+                <>
+                  <span>{values.dateRange.split('–')[0].trim()}</span>
+                  <span>– {values.dateRange.split('–')[1].trim()}</span>
+                </>
+              ) : (
+                <span>{values.dateRange}</span>
+              )}
+            </div>
+          )}
         </button>
         {/* Калории */}
         <button className="metric metric-btn tile-half" onClick={onEditCalories} aria-label="Изменить план калорий">
@@ -661,7 +673,27 @@ export default function TelegramWebAppMainMockup() {
   const [tmpNeckCm, setTmpNeckCm] = useState<string>('');
 
   const openGoal = () => { setGoalMode(inferGoalMode(goalTitle, goalNote)); setTmpStartISO(todayISO()); setTmpEndISO(''); setModal({ type: 'goal' }); };
-  const saveGoal = () => { if (isInvalidRange(tmpStartISO, tmpEndISO)) return; const p = GOAL_PRESETS[goalMode]; setGoalTitle(p.title); setGoalNote(p.note); setDateRange(makeRangeLabel(tmpStartISO, tmpEndISO)); close(); };
+  const saveGoal = () => {
+    const p = GOAL_PRESETS[goalMode];
+    setGoalTitle(p.title);
+    setGoalNote(p.note);
+    // allow empty dates (open interval) and auto-format label
+    let range = '';
+    const hasStart = !!tmpStartISO;
+    const hasEnd = !!tmpEndISO;
+    if (hasStart && hasEnd) {
+      if (isInvalidRange(tmpStartISO, tmpEndISO)) return; // invalid end
+      range = makeRangeLabel(tmpStartISO, tmpEndISO);
+    } else if (hasStart) {
+      range = `с ${fmtDateRU(tmpStartISO)}`;
+    } else if (hasEnd) {
+      range = `до ${fmtDateRU(tmpEndISO)}`;
+    } else {
+      range = '';
+    }
+    setDateRange(range);
+    close();
+  };
 
   const openCal = () => { setTmpText1(String(calPlan)); setModal({ type: 'cal' }); };
   const saveCal = () => { const v = parseInt(tmpText1, 10); if (!Number.isNaN(v) && v > 0) setCalPlan(v); close(); };
@@ -945,7 +977,7 @@ export default function TelegramWebAppMainMockup() {
             <div className="field">
               <label className="subtle text-sm">Дата окончания</label>
               <input className="input" type="date" value={tmpEndISO} onChange={e => setTmpEndISO(e.target.value)} min={tmpStartISO || undefined} />
-              {isInvalidRange(tmpStartISO, tmpEndISO) && (
+              {tmpEndISO && isInvalidRange(tmpStartISO, tmpEndISO) && (
                 <div className="subtle" style={{ color: 'var(--err)' }}>
                   Выберите корректную дату окончания (после даты начала).
                 </div>
