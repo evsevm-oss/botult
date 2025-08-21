@@ -128,3 +128,36 @@ sudo -i && cd /root/calorie-photo-bot && mv /home/debian/update.zip ./update.zip
   && curl -s http://127.0.0.1:8000/health | cat && journalctl -u ultima-bot.service -n 60 --no-pager -o cat
 ```
 
+### 8) WebApp/Caddy — почему «ничего не меняется» или 502 после сборки
+
+Симптомы:
+- HTTPS `https://<домен>/webapp/` отдаёт 502 или продолжает показывать старую версию после `npm run build`.
+
+Типовые причины:
+- Caddy не перезагружен после рестарта API — прокси держит старый upstream/соединение и/или отдаёт старый index.html из кеша.
+- В исходном `webapp/index.html` был неверный путь к entry (должно быть `<script type="module" src="/src/main.tsx">`).
+- Не проверили, что `dist/index.html` ссылается на новый хешированный asset (`assets/index-*.js`).
+
+Правильная последовательность деплоя фронта на VPS:
+```bash
+cd /root/calorie-photo-bot/webapp
+npm run -s build
+cd ..
+systemctl restart ultima-api.service
+systemctl reload caddy || systemctl restart caddy
+```
+
+Как проверить, что обновление действительно применилось:
+```bash
+# статус и заголовки (должно быть 200 OK, свежий Last-Modified)
+curl -sI https://<домен>/webapp/ | sed -n '1,20p'
+
+# посмотреть начало HTML и ссылку на новый бандл assets/index-*.js
+curl -s https://<домен>/webapp/ | sed -n '1,30p'
+```
+
+Подсказки:
+- Если после сборки по HTTP 127.0.0.1:8000 всё ок, а по HTTPS 502 — почти всегда забыли `systemctl reload caddy`.
+- В Telegram Mini App может кэшироваться страница: попросите пользователя закрыть webview и открыть заново, потянуть вниз для обновления.
+
+

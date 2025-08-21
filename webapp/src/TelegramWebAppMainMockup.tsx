@@ -23,10 +23,10 @@ const RootStyles: React.FC = () => (
     img,svg,video,canvas{display:block;max-width:100%}
     button,input,select,textarea{font:inherit;color:inherit;background:transparent;border:0;-webkit-appearance:none;appearance:none;padding:0;border-radius:0}
     /* Robust custom radios (work across Telegram WebView versions) */
-    .field label{ display:flex; align-items:center; gap:8px; }
+    .field label{ display:flex; align-items:flex-start; gap:8px; }
     .field label input[type="radio"]{ position:absolute; opacity:0; width:1px; height:1px; }
-    .field label span{ display:inline-flex; align-items:center; }
-    .field label span::before{ content:""; display:inline-block; width:18px; height:18px; border-radius:9999px; border:2px solid rgba(255,255,255,0.35); margin-right:8px; box-sizing:border-box; }
+    .field label span{ display:inline-flex; align-items:flex-start; line-height:1.35; }
+    .field label span::before{ content:""; display:inline-block; width:18px; height:18px; flex:0 0 18px; border-radius:9999px; border:2px solid rgba(255,255,255,0.35); margin-right:8px; margin-top:2px; box-sizing:border-box; }
     .field label input[type="radio"]:checked + span{ color: var(--link); font-weight:600; }
     .field label input[type="radio"]:checked + span::before{ border-color: var(--link); box-shadow: inset 0 0 0 6px var(--link); }
     .field label input[type="radio"]:focus-visible + span::before{ outline:2px solid rgba(109,40,217,0.65); outline-offset:2px; }
@@ -983,10 +983,19 @@ export default function TelegramWebAppMainMockup() {
           >
             <div className="field" role="radiogroup" aria-label="Пол">
               <div className="subtle text-sm">Пол</div>
-              <div className="flex gap-2 mt-1">
-                <label className="tab cursor-pointer"><input type="radio" name="sex" className="mr-1" checked={tmpGender==='male'} onChange={() => setTmpGender('male')} />мужчина</label>
-                <label className="tab cursor-pointer"><input type="radio" name="sex" className="mr-1" checked={tmpGender==='female'} onChange={() => setTmpGender('female')} />женщина</label>
-                <label className="tab cursor-pointer"><input type="radio" name="sex" className="mr-1" checked={tmpGender==='other'} onChange={() => setTmpGender('other')} />другое</label>
+              <div className="flex flex-col gap-2 mt-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="sex" checked={tmpGender==='male'} onChange={() => setTmpGender('male')} />
+                  <span>мужчина</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="sex" checked={tmpGender==='female'} onChange={() => setTmpGender('female')} />
+                  <span>женщина</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="sex" checked={tmpGender==='other'} onChange={() => setTmpGender('other')} />
+                  <span>другое</span>
+                </label>
               </div>
             </div>
 
