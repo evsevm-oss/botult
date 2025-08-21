@@ -22,8 +22,10 @@ const RootStyles: React.FC = () => (
     body{font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,Arial,'Noto Sans','Apple Color Emoji','Segoe UI Emoji',sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
     img,svg,video,canvas{display:block;max-width:100%}
     button,input,select,textarea{font:inherit;color:inherit;background:transparent;border:0;-webkit-appearance:none;appearance:none;padding:0;border-radius:0}
-    /* Keep native iOS look for radios/checkboxes */
-    input[type="radio"], input[type="checkbox"]{ -webkit-appearance:auto; appearance:auto; }
+    /* Keep native iOS look for radios/checkboxes and make them visible */
+    input[type="radio"], input[type="checkbox"]{ -webkit-appearance:auto; appearance:auto; accent-color: var(--link); width:18px; height:18px; }
+    .field label input{ margin-right:8px; }
+    .field label input:checked + span { color: var(--link); font-weight:600; }
     a{color:inherit;text-decoration:none}
     #root{isolation:isolate}
     :root {
