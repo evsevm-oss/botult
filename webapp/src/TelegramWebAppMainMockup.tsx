@@ -28,7 +28,7 @@ const RootStyles: React.FC = () => (
     .field label span{ display:inline-flex; align-items:flex-start; line-height:1.35; }
     .field label span::before{ content:""; display:inline-block; width:18px; height:18px; flex:0 0 18px; border-radius:9999px; border:2px solid rgba(255,255,255,0.35); margin-right:8px; margin-top:2px; box-sizing:border-box; }
     .field label input[type="radio"]:checked + span{ color: var(--link); font-weight:600; }
-    .field label input[type="radio"]:checked + span::before{ border-color: var(--link); box-shadow: inset 0 0 0 6px var(--link); }
+    .field label input[type="radio"]:checked + span::before{ border-color: var(--link); background: radial-gradient(circle, var(--link) 6px, transparent 7px); }
     .field label input[type="radio"]:focus-visible + span::before{ outline:2px solid rgba(109,40,217,0.65); outline-offset:2px; }
     a{color:inherit;text-decoration:none}
     #root{isolation:isolate}
