@@ -23,10 +23,15 @@ basic_router = Router()
 async def cmd_start(message: Message) -> None:
     from bot.keyboards import webapp_cta_kb
     kb = webapp_cta_kb(screen="dashboard")
-    await message.answer(
-        "Привет! Я бот‑коуч по питанию (MVP). Доступно: /help, /budget.",
-        reply_markup=kb if kb is not None else None
-    )
+    # отправим привет и видео (если доступно) с кнопкой открытия WebApp
+    await message.answer("Привет! Я бот‑коуч по питанию (MVP). Вот короткое видео о возможностях Ultima.")
+    try:
+        from aiogram.types import FSInputFile
+        video = FSInputFile("data/content/templates/video/ready_video/first.mp4")
+        await message.answer_video(video=video, caption="Нажмите, чтобы открыть приложение.", reply_markup=kb if kb is not None else None)
+    except Exception:
+        # fallback: без видео только CTA
+        await message.answer("Открыть приложение:", reply_markup=kb if kb is not None else None)
 
 
 @basic_router.message(Command("help"))

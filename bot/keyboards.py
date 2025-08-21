@@ -14,7 +14,7 @@ def main_menu_kb() -> InlineKeyboardMarkup:
     ]
     if settings.webapp_url and str(settings.webapp_url).startswith("https://"):
         buttons.append([
-            InlineKeyboardButton(text="Открыть WebApp", web_app={"url": settings.webapp_url})
+            InlineKeyboardButton(text="Открыть Ultima App", web_app={"url": settings.webapp_url})
         ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -33,6 +33,6 @@ def webapp_cta_kb(screen: str | None = None, date_iso: str | None = None) -> Inl
     if params:
         sep = '&' if ('?' in url) else '?'
         url = f"{url}{sep}{'&'.join(params)}"
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть WebApp", web_app={"url": url})]])
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть Ultima App", web_app={"url": url})]])
     return kb
 
