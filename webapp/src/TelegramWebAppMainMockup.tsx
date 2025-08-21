@@ -22,10 +22,14 @@ const RootStyles: React.FC = () => (
     body{font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,Arial,'Noto Sans','Apple Color Emoji','Segoe UI Emoji',sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
     img,svg,video,canvas{display:block;max-width:100%}
     button,input,select,textarea{font:inherit;color:inherit;background:transparent;border:0;-webkit-appearance:none;appearance:none;padding:0;border-radius:0}
-    /* Keep native iOS look for radios/checkboxes and make them visible */
-    input[type="radio"], input[type="checkbox"]{ -webkit-appearance:auto; appearance:auto; accent-color: var(--link); width:18px; height:18px; }
-    .field label input{ margin-right:8px; }
-    .field label input:checked + span { color: var(--link); font-weight:600; }
+    /* Robust custom radios (work across Telegram WebView versions) */
+    .field label{ display:flex; align-items:center; gap:8px; }
+    .field label input[type="radio"]{ position:absolute; opacity:0; width:1px; height:1px; }
+    .field label span{ display:inline-flex; align-items:center; }
+    .field label span::before{ content:""; display:inline-block; width:18px; height:18px; border-radius:9999px; border:2px solid rgba(255,255,255,0.35); margin-right:8px; box-sizing:border-box; }
+    .field label input[type="radio"]:checked + span{ color: var(--link); font-weight:600; }
+    .field label input[type="radio"]:checked + span::before{ border-color: var(--link); box-shadow: inset 0 0 0 6px var(--link); }
+    .field label input[type="radio"]:focus-visible + span::before{ outline:2px solid rgba(109,40,217,0.65); outline-offset:2px; }
     a{color:inherit;text-decoration:none}
     #root{isolation:isolate}
     :root {
