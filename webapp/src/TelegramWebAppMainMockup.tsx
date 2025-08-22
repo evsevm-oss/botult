@@ -300,13 +300,13 @@ const MainInfo: React.FC<MainInfoProps> = ({ values, onEditGoal, onEditCalories,
         {/* Калории */}
         <button className="metric metric-btn tile-half" onClick={onEditCalories} aria-label="Изменить план калорий">
           <div className="subtle text-[12px] mb-1">Калории</div>
-          <div className="value-xl mono">{`< ${nf(values.calPlan)} ккал`}</div>
+          <div className="value-xl mono">{Number.isFinite(values.calPlan) ? `< ${nf(values.calPlan)} ккал` : '—'}</div>
           <div className="pill mt-1">план на день</div>
         </button>
         {/* Протеин */}
         <button className="metric metric-btn tile-half" onClick={onEditProtein} aria-label="Изменить план протеина">
           <div className="subtle text-[12px] mb-1">Протеин</div>
-          <div className="value-xl mono">{`> ${nf(values.protPlan)} г`}</div>
+          <div className="value-xl mono">{Number.isFinite(values.protPlan) ? `> ${nf(values.protPlan)} г` : '—'}</div>
           <div className="pill mt-1">план на день</div>
         </button>
       </div>
@@ -316,16 +316,16 @@ const MainInfo: React.FC<MainInfoProps> = ({ values, onEditGoal, onEditCalories,
         <button className="metric metric-btn flex items-center justify-between" onClick={onAddWeightToday} aria-label="Добавить вес за сегодня">
           <div>
             <div className="subtle text-[12px] mb-1">Вес</div>
-            <div className="value-xl mono">{nf(values.weight)} кг</div>
+            <div className="value-xl mono">{Number.isFinite(values.weight) ? `${nf(values.weight)} кг` : '—'}</div>
           </div>
-          <div className="pill">{values.weightDelta}</div>
+          <div className="pill">{values.weightDelta || '—'}</div>
         </button>
         <button className="metric metric-btn flex items-center justify-between" onClick={onAddFatToday} aria-label="Добавить долю жира за сегодня">
           <div>
             <div className="subtle text-[12px] mb-1">Доля жира</div>
-            <div className="value-xl mono">~{nf(values.fatPct)}%</div>
+            <div className="value-xl mono">{Number.isFinite(values.fatPct) ? `~${nf(values.fatPct)}%` : '—'}</div>
           </div>
-          <div className="pill">{values.fatDelta}</div>
+          <div className="pill">{values.fatDelta || '—'}</div>
         </button>
       </div>
     </div>
@@ -629,33 +629,46 @@ export default function TelegramWebAppMainMockup() {
   const [loading, setLoading] = useState(true);
   
 
-  // Верхние плитки
-  const [goalTitle, setGoalTitle] = useState('Снижение веса');
-  const [goalNote, setGoalNote] = useState('дефицит калорий');
-  const [dateRange, setDateRange] = useState('19 мая 2025 – 18 августа 2025');
-  const [calPlan, setCalPlan] = useState(1950);
-  const [protPlan, setProtPlan] = useState(120);
-  const [weight, setWeight] = useState(68);
-  const [weightDelta, setWeightDelta] = useState('-5%');
-  const [fatPct, setFatPct] = useState(25);
-  const [fatDelta, setFatDelta] = useState('-5%');
-  const [weightHistory, setWeightHistory] = useState<number[]>([71.6, weight]);
-  const [fatHistory, setFatHistory] = useState<number[]>([26.3, fatPct]);
+  // Верхние плитки — начально пустые значения
+  const [goalTitle, setGoalTitle] = useState<string>('—');
+  const [goalNote, setGoalNote] = useState<string>('');
+  const [dateRange, setDateRange] = useState<string>('');
+  const [calPlan, setCalPlan] = useState<number>(NaN);
+  const [protPlan, setProtPlan] = useState<number>(NaN);
+  const [weight, setWeight] = useState<number>(NaN);
+  const [weightDelta, setWeightDelta] = useState<string>('—');
+  const [fatPct, setFatPct] = useState<number>(NaN);
+  const [fatDelta, setFatDelta] = useState<string>('—');
+  const [weightsByDate, setWeightsByDate] = useState<Record<string, number>>({});
+  const [fatByDate, setFatByDate] = useState<Record<string, number>>({});
 
+  // Загрузка сохранённых значений из localStorage
   useEffect(() => {
-    if (weightHistory.length >= 2) {
-      const prev = weightHistory[weightHistory.length - 2];
-      const curr = weightHistory[weightHistory.length - 1];
-      setWeightDelta(deltaLabel(prev, curr));
-    }
-  }, [weightHistory]);
+    try {
+      const gt = localStorage.getItem('profile.goalTitle'); if (gt) setGoalTitle(gt);
+      const gn = localStorage.getItem('profile.goalNote'); if (gn !== null) setGoalNote(gn);
+      const dr = localStorage.getItem('profile.dateRange'); if (dr !== null) setDateRange(dr);
+      const cp = localStorage.getItem('profile.calPlan'); if (cp) setCalPlan(Number(cp));
+      const pp = localStorage.getItem('profile.protPlan'); if (pp) setProtPlan(Number(pp));
+      const wb = localStorage.getItem('profile.weightsByDate'); if (wb) setWeightsByDate(JSON.parse(wb));
+      const fb = localStorage.getItem('profile.fatByDate'); if (fb) setFatByDate(JSON.parse(fb));
+    } catch {}
+  }, []);
+  // Вывод актуальных веса/жира и дельт из карт по датам
   useEffect(() => {
-    if (fatHistory.length >= 2) {
-      const prev = fatHistory[fatHistory.length - 2];
-      const curr = fatHistory[fatHistory.length - 1];
-      setFatDelta(deltaLabel(prev, curr));
-    }
-  }, [fatHistory]);
+    const derive = (map: Record<string, number>) => {
+      const dates = Object.keys(map).sort();
+      const last = dates.length ? map[dates[dates.length - 1]] : NaN;
+      const prev = dates.length > 1 ? map[dates[dates.length - 2]] : NaN;
+      return { last, prev };
+    };
+    const w = derive(weightsByDate);
+    setWeight(Number.isFinite(w.last) ? w.last : NaN);
+    setWeightDelta(Number.isFinite(w.prev) && Number.isFinite(w.last) ? deltaLabel(w.prev, w.last) : '—');
+    const f = derive(fatByDate);
+    setFatPct(Number.isFinite(f.last) ? f.last : NaN);
+    setFatDelta(Number.isFinite(f.prev) && Number.isFinite(f.last) ? deltaLabel(f.prev, f.last) : '—');
+  }, [weightsByDate, fatByDate]);
   const [goalMode, setGoalMode] = useState<'loss'|'maint'|'gain'|'nocw'>(() => inferGoalMode(goalTitle, goalNote));
 
   // Модалки
@@ -692,25 +705,34 @@ export default function TelegramWebAppMainMockup() {
       range = '';
     }
     setDateRange(range);
+    // persist & сброс планов калорий/протеина
+    try {
+      localStorage.setItem('profile.goalTitle', p.title);
+      localStorage.setItem('profile.goalNote', p.note);
+      localStorage.setItem('profile.dateRange', range);
+      setCalPlan(NaN); setProtPlan(NaN);
+      localStorage.removeItem('profile.calPlan');
+      localStorage.removeItem('profile.protPlan');
+    } catch {}
     close();
   };
 
   const openCal = () => { setTmpText1(String(calPlan)); setModal({ type: 'cal' }); };
-  const saveCal = () => { const v = parseInt(tmpText1, 10); if (!Number.isNaN(v) && v > 0) setCalPlan(v); close(); };
+  const saveCal = () => { const v = parseInt(tmpText1, 10); if (!Number.isNaN(v) && v > 0) { setCalPlan(v); try { localStorage.setItem('profile.calPlan', String(v)); } catch {} } close(); };
 
   const openProt = () => { setTmpText1(String(protPlan)); setModal({ type: 'prot' }); };
-  const saveProt = () => { const v = parseInt(tmpText1, 10); if (!Number.isNaN(v) && v > 0) setProtPlan(v); close(); };
+  const saveProt = () => { const v = parseInt(tmpText1, 10); if (!Number.isNaN(v) && v > 0) { setProtPlan(v); try { localStorage.setItem('profile.protPlan', String(v)); } catch {} } close(); };
 
   const openWeight = () => { setTmpText1(String(weight)); setModal({ type: 'weight' }); };
-  const saveWeight = () => { const v = Number(tmpText1); if (!Number.isNaN(v) && v > 0) { setWeight(v); setWeightHistory(h => [...h, v]); } close(); };
+  const saveWeight = () => { const v = Number(tmpText1); if (!Number.isNaN(v) && v > 0) { const d = todayISO(); setWeightsByDate(m => { const nm = { ...m, [d]: v }; try { localStorage.setItem('profile.weightsByDate', JSON.stringify(nm)); } catch {} return nm; }); } close(); };
 
   const openFat = () => { setTmpGender('male'); setTmpHeightCm(''); setTmpWeightKg(String(weight)); setTmpWaistCm(''); setTmpNeckCm(''); setModal({ type: 'fat' }); };
   const saveFat = () => {
     const bf = computeBodyFat(tmpGender, parseNum(tmpHeightCm), parseNum(tmpWeightKg), parseNum(tmpWaistCm), parseNum(tmpNeckCm));
     if (bf != null && isFinite(bf) && bf >= 0) {
       const val = Math.round(bf * 10) / 10;
-      setFatPct(val);
-      setFatHistory(h => [...h, val]);
+      const d = todayISO();
+      setFatByDate(m => { const nm = { ...m, [d]: val }; try { localStorage.setItem('profile.fatByDate', JSON.stringify(nm)); } catch {} return nm; });
       // send to server
       const tgId = getTelegramId();
       if (tgId) {

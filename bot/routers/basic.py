@@ -24,11 +24,27 @@ async def cmd_start(message: Message) -> None:
     from bot.keyboards import webapp_cta_kb
     kb = webapp_cta_kb(screen="dashboard")
     # отправим привет и видео (если доступно) с кнопкой открытия WebApp
-    await message.answer("Привет! Я бот‑коуч по питанию (MVP). Вот короткое видео о возможностях Ultima.")
+    await message.answer("Привет! Я твой кибер-робот Ultima, я помогу сделать твою диету максимльно простой и результативной. Пожалуйста, посмотри видео про мои возможности:")
     try:
         from aiogram.types import FSInputFile
         video = FSInputFile("data/content/templates/video/ready_video/first.mp4")
-        await message.answer_video(video=video, caption="Нажмите, чтобы открыть приложение.", reply_markup=kb if kb is not None else None)
+        # Кнопка с расширенным текстом только для этого сообщения
+        btn_kb = None
+        try:
+            if settings.webapp_url and str(settings.webapp_url).startswith("https://"):
+                btn_kb = InlineKeyboardMarkup(
+                    inline_keyboard=[[InlineKeyboardButton(
+                        text="Далее нажми «Открыть Ultima App» и выбери текущую цель. Другие параметры пока не вводи.",
+                        web_app={"url": settings.webapp_url},
+                    )]]
+                )
+        except Exception:
+            btn_kb = None
+        await message.answer_video(
+            video=video,
+            caption="Далее нажми «Открыть Ultima App» и выбери текущую цель (её можно будет изменить в будущем)",
+            reply_markup=(btn_kb or (kb if kb is not None else None)),
+        )
     except Exception:
         # fallback: без видео только CTA
         await message.answer("Открыть приложение:", reply_markup=kb if kb is not None else None)
