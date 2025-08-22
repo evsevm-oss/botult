@@ -28,13 +28,13 @@ async def cmd_start(message: Message) -> None:
     try:
         from aiogram.types import FSInputFile
         video = FSInputFile("data/content/templates/video/ready_video/first.mp4")
-        # Кнопка с расширенным текстом только для этого сообщения
+        # Кнопка только для этого сообщения
         btn_kb = None
         try:
             if settings.webapp_url and str(settings.webapp_url).startswith("https://"):
                 btn_kb = InlineKeyboardMarkup(
                     inline_keyboard=[[InlineKeyboardButton(
-                        text="Далее нажми «Открыть Ultima App» и выбери текущую цель. Другие параметры пока не вводи.",
+                        text="Открыть UltimaApp",
                         web_app={"url": settings.webapp_url},
                     )]]
                 )
@@ -42,7 +42,7 @@ async def cmd_start(message: Message) -> None:
             btn_kb = None
         await message.answer_video(
             video=video,
-            caption="Далее нажми «Открыть Ultima App» и выбери текущую цель (её можно будет изменить в будущем)",
+            caption="Далее нажми «Открыть Ultima App» и выбери текущую цель. Другие параметры пока не вводи.",
             reply_markup=(btn_kb or (kb if kb is not None else None)),
         )
     except Exception:
