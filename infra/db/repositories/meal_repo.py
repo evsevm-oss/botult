@@ -70,6 +70,7 @@ class MealRepo:
             await self.session.commit()
 
     async def list_by_date(self, *, user_id: int, on_date: Date) -> list[dict[str, Any]]:
+        # Deprecated: prefer list_between with explicit tz boundaries
         start = datetime.combine(on_date, datetime.min.time()).astimezone()
         end = datetime.combine(on_date, datetime.max.time()).astimezone()
         res = await self.session.execute(

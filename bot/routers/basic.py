@@ -28,22 +28,13 @@ async def cmd_start(message: Message) -> None:
     try:
         from aiogram.types import FSInputFile
         video = FSInputFile("data/content/templates/video/ready_video/first.mp4")
-        # Кнопка только для этого сообщения
-        btn_kb = None
-        try:
-            if settings.webapp_url and str(settings.webapp_url).startswith("https://"):
-                btn_kb = InlineKeyboardMarkup(
-                    inline_keyboard=[[InlineKeyboardButton(
-                        text="Открыть UltimaApp",
-                        web_app={"url": settings.webapp_url},
-                    )]]
-                )
-        except Exception:
-            btn_kb = None
+        # Кнопка: используем общий генератор с cache-busting
+        from bot.keyboards import webapp_cta_kb as _webapp_kb
+        btn_kb = _webapp_kb(screen="dashboard")
         await message.answer_video(
             video=video,
             caption="Далее нажми «Открыть Ultima App» и выбери текущую цель. Другие параметры пока не вводи.",
-            reply_markup=(btn_kb or (kb if kb is not None else None)),
+            reply_markup=(btn_kb if btn_kb is not None else kb),
         )
     except Exception:
         # fallback: без видео только CTA
@@ -124,6 +115,10 @@ async def on_photo(message: Message) -> None:
                     preview = "\n".join(
                         f"• {i['name']} — {int(i.get('amount',0))}{i.get('unit','g')} ≈ {int(i.get('kcal',0))} ккал" for i in items
                     )
+                    # Подсказки по масштабу/диаметру и прочим уточнениям
+                    clar = data.get("clarifications") or []
+                    if clar:
+                        preview += "\n\nУточните:\n" + "\n".join(f"— {c}" for c in clar[:5])
                     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Сохранить", callback_data=f"photo_save:{img_id}"), InlineKeyboardButton(text="Отменить", callback_data=f"photo_cancel:{img_id}")]])
                     await message.answer(f"Распознано по альбому:\n{preview}", reply_markup=kb)
             asyncio.create_task(_finalize())

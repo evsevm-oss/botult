@@ -98,6 +98,12 @@ def create_app() -> FastAPI:
             response.headers["X-Content-Type-Options"] = "nosniff"
             response.headers["Referrer-Policy"] = "no-referrer"
             response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+            # Disable caching of HTML to avoid stale index.html in Telegram WebView (mobile)
+            ct = (response.headers.get("content-type") or "").lower()
+            if "text/html" in ct:
+                response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+                response.headers["Pragma"] = "no-cache"
+                response.headers["Expires"] = "0"
         return response
 
     @app.get("/health")
@@ -124,6 +130,7 @@ def create_app() -> FastAPI:
         session: AsyncSession = Depends(get_session),
     ) -> APIResponse:
         repo = DailySummaryRepo(session)
+        meals_repo = MealRepo(session)
         inp = RecalcBudgetsInput(
             user_id=user_id,
             sex=payload.sex,
@@ -288,13 +295,46 @@ def create_app() -> FastAPI:
     async def bodyfat_save(telegram_id: int, payload: BodyFatInput, session: AsyncSession = Depends(get_session)) -> APIResponse:
         users = UserRepo(session)
         user_id = await users.get_or_create_by_telegram_id(telegram_id)
-        # naive store: reuse DailySummary to keep latest bodyfat in profile-like storage or separate table (not yet)
-        # For now, write to user_settings as last_bodyfat
+        # Store daily bodyfat in user_settings as per-day map + keep last_bodyfat
         settings_repo = UserSettingsRepo(session)
         current = await settings_repo.get(user_id) or {}
+        # per-day map
+        bf_map = dict(current.get("bodyfat_by_date") or {})
+        bf_map[payload.date.isoformat()] = float(payload.percent)
+        current["bodyfat_by_date"] = bf_map
         current["last_bodyfat"] = {"date": payload.date.isoformat(), "percent": float(payload.percent)}
         await settings_repo.upsert(user_id, data=current)
         return APIResponse(ok=True, data={"ok": True})
+
+    @app.get("/api/bodyfat", response_model=APIResponse)
+    async def bodyfat_list(
+        telegram_id: int,
+        start: str | None = None,
+        end: str | None = None,
+        session: AsyncSession = Depends(get_session),
+    ) -> APIResponse:
+        users = UserRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        settings_repo = UserSettingsRepo(session)
+        current = await settings_repo.get(user_id) or {}
+        bf_map: dict[str, float] = current.get("bodyfat_by_date") or {}
+        from datetime import date as D, timedelta
+        if start:
+            s = D.fromisoformat(start)
+        else:
+            s = D.today() - timedelta(days=6)
+        if end:
+            e = D.fromisoformat(end)
+        else:
+            e = D.today()
+        items: list[dict] = []
+        d = s
+        while d <= e:
+            iso = d.isoformat()
+            if iso in bf_map:
+                items.append({"date": iso, "percent": float(bf_map[iso])})
+            d = d + timedelta(days=1)
+        return APIResponse(ok=True, data={"items": items})
 
     @app.post("/api/weights", response_model=APIResponse)
     async def add_weight(telegram_id: int, payload: WeightInput, session: AsyncSession = Depends(get_session)) -> APIResponse:
@@ -341,14 +381,25 @@ def create_app() -> FastAPI:
         return APIResponse(ok=True, data={"items": meals})
 
     @app.post("/api/meals", response_model=APIResponse)
-    async def create_meal(telegram_id: int, payload: MealCreate, request: Request, session: AsyncSession = Depends(get_session)) -> APIResponse:
+    async def create_meal(telegram_id: int, payload: MealCreate, request: Request, tz: str | None = None, session: AsyncSession = Depends(get_session)) -> APIResponse:
         users = UserRepo(session)
         repo = MealRepo(session)
         user_id = await users.get_or_create_by_telegram_id(telegram_id)
         # transactional create + summary recompute
         # transactional section below uses autocommit=False and explicit session.commit()
         from datetime import date as D
-        d = D.fromisoformat(payload.at.date().isoformat())
+        # Determine local date for summary using provided tz (default Europe/Madrid).
+        try:
+            tzname = tz or "Europe/Madrid"
+            from zoneinfo import ZoneInfo as _ZI
+            dt = payload.at
+            if dt.tzinfo is None:
+                # assume UTC if naive
+                from datetime import timezone as _tz
+                dt = dt.replace(tzinfo=_tz.utc)
+            d = dt.astimezone(_ZI(tzname)).date()
+        except Exception:
+            d = D.fromisoformat(payload.at.date().isoformat())
         try:
             meal_id = await repo.create_meal(
                 user_id=user_id,
@@ -368,7 +419,7 @@ def create_app() -> FastAPI:
                 await session.rollback()
                 raise HTTPException(status_code=409, detail="E_DUPLICATE_MEAL_SOURCE")
             raise
-        sums = await repo.sum_macros_for_date(user_id=user_id, on_date=d)
+        sums = await repo.sum_macros_for_date(user_id=user_id, on_date=d, tz=(tz or "Europe/Madrid"))
         await DailySummaryRepo(session).upsert_daily_summary(
             user_id=user_id, on_date=d, kcal=sums["kcal"], protein_g=sums["protein_g"], fat_g=sums["fat_g"], carb_g=sums["carb_g"], autocommit=False
         )
@@ -557,6 +608,64 @@ def create_app() -> FastAPI:
         except InvalidTokenError:
             return APIResponse(ok=False, error={"code": "E_BAD_TOKEN", "message": "Invalid token"})
 
+    # Send strategy video after goal change (triggered from WebApp)
+    @app.post("/api/goal-notify", response_model=APIResponse)
+    async def goal_notify(telegram_id: int, mode: str = Body(..., embed=True)) -> APIResponse:
+        try:
+            log.info("goal_notify_call", telegram_id=int(telegram_id), mode=mode)
+        except Exception:
+            pass
+        if not settings.telegram_bot_token:
+            raise HTTPException(status_code=500, detail="Bot token is not configured")
+        # rate-limit & dedupe per user/mode for 10 minutes
+        key = f"goal_notify:{telegram_id}:{mode}"
+        try:
+            exist = await redis_client.get(key)
+            if exist:
+                return APIResponse(ok=True, data={"sent": False})
+            await redis_client.setex(key, 600, "1")
+        except Exception:
+            pass
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
+        bot = TgBot(settings.telegram_bot_token)
+        web_url = settings.webapp_url or ""
+        # add cache-busting to force fresh WebApp load in Telegram mobile WebView
+        try:
+            if web_url and web_url.startswith("https://"):
+                import time as _t
+                sep = '&' if ('?' in web_url) else '?'
+                web_url = f"{web_url}{sep}v={int(_t.time())}"
+        except Exception:
+            pass
+        base = Path(__file__).resolve().parents[2] / "data/content/templates/video/ready_video"
+        caption = ""
+        video_path = None
+        if mode == "loss":
+            caption = "Новая стратегия — Снижение веса (похудение). Посмотри видео и введи нужные данные."
+            video_path = base / "Ultima — SecondVideo 1.mp4"
+            kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть Ultima App", web_app={"url": web_url}), InlineKeyboardButton(text="Заполнить позже", callback_data="goal_later")]])
+        elif mode == "maint":
+            caption = "Новая стратегия — Поддержание веса. Посмотри видео и введи нужные данные."
+            video_path = base / "Ultima — SecondVideo 2.mp4"
+            kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть Ultima App", web_app={"url": web_url}), InlineKeyboardButton(text="Заполнить позже", callback_data="goal_later")]])
+        elif mode == "gain":
+            caption = "Новая стратегия — Рост мышечной массы. Посмотри видео и введи нужные данные."
+            video_path = base / "Ultima — SecondVideo 3.mp4"
+            kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть Ultima App", web_app={"url": web_url}), InlineKeyboardButton(text="Заполнить позже", callback_data="goal_later")]])
+        else:
+            caption = "Новая стратегия — Контроль потребления (без целей по весу). Посмотри видео и введи нужные данные."
+            video_path = base / "Ultima — SecondVideo 4.mp4"
+            kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Продолжить", callback_data="goal_continue")]])
+        try:
+            if video_path and video_path.exists():
+                await bot.send_video(chat_id=int(telegram_id), video=FSInputFile(str(video_path)), caption=caption, reply_markup=kb)
+            else:
+                # fallback to message only
+                await bot.send_message(chat_id=int(telegram_id), text=caption, reply_markup=kb)
+        except Exception:
+            return APIResponse(ok=False, error={"code": "E_SEND", "message": "Failed to send"})
+        return APIResponse(ok=True, data={"sent": True})
+
     # Stage 7: normalization endpoint (text based MVP)
     @app.post("/api/normalize", response_model=NormalizeResponse)
     async def normalize(payload: NormalizeInput, request: Request) -> NormalizeResponse:
@@ -606,7 +715,7 @@ def create_app() -> FastAPI:
 
     # Stage 11: summaries & trends
     @app.get("/api/summary/daily", response_model=APIResponse)
-    async def summary_daily(telegram_id: int, date: str, tz: str | None = None, session: AsyncSession = Depends(get_session)) -> APIResponse:
+    async def summary_daily(telegram_id: int, date: str, tz: str | None = None, no_cache: int = 0, session: AsyncSession = Depends(get_session)) -> APIResponse:
         users = UserRepo(session)
         profiles = ProfileRepo(session)
         user_id = await users.get_or_create_by_telegram_id(telegram_id)
@@ -614,13 +723,14 @@ def create_app() -> FastAPI:
         d = D.fromisoformat(date)
         # Cache key
         key = f"summary:daily:{user_id}:{d.isoformat()}"
-        try:
-            cached = await redis_client.get(key)
-            if cached:
-                import json as _json
-                return APIResponse(ok=True, data=_json.loads(cached))
-        except Exception:
-            pass
+        if not no_cache:
+            try:
+                cached = await redis_client.get(key)
+                if cached:
+                    import json as _json
+                    return APIResponse(ok=True, data=_json.loads(cached))
+            except Exception:
+                pass
         # Consumed
         meals = MealRepo(session)
         sums = await meals.sum_macros_for_date(user_id=user_id, on_date=d, tz=tz)
@@ -674,14 +784,15 @@ def create_app() -> FastAPI:
             },
             "top_items": top_items or None,
         }
-        try:
-            await redis_client.setex(key, 300, _json.dumps(data))
-        except Exception:
-            pass
+        if not no_cache:
+            try:
+                await redis_client.setex(key, 300, _json.dumps(data))
+            except Exception:
+                pass
         return APIResponse(ok=True, data=data)
 
     @app.get("/api/summary/weekly", response_model=APIResponse)
-    async def summary_weekly(telegram_id: int, start: str | None = None, tz: str | None = None, session: AsyncSession = Depends(get_session)) -> APIResponse:
+    async def summary_weekly(telegram_id: int, start: str | None = None, tz: str | None = None, no_cache: int = 0, session: AsyncSession = Depends(get_session)) -> APIResponse:
         users = UserRepo(session)
         user_id = await users.get_or_create_by_telegram_id(telegram_id)
         from datetime import date as D, timedelta
@@ -691,22 +802,47 @@ def create_app() -> FastAPI:
             s = D.fromisoformat(start)
         e = s + timedelta(days=6)
         repo = DailySummaryRepo(session)
+        meals_repo = MealRepo(session)
         # Try cache
         cache_key = f"summary:weekly:{user_id}:{s.isoformat()}"
-        try:
-            cached = await redis_client.get(cache_key)
-        except Exception:
-            cached = None
-        if cached:
-            return APIResponse(ok=True, data=_json.loads(cached))
+        cached = None
+        if not no_cache:
+            try:
+                cached = await redis_client.get(cache_key)
+            except Exception:
+                cached = None
+            if cached:
+                return APIResponse(ok=True, data=_json.loads(cached))
         items = await repo.list_between(user_id=user_id, start=s, end=e)
+        # Ensure contiguous daily items; fill gaps from meals if summaries missing
+        from datetime import timedelta as _td
+        existing = {it["date"]: it for it in items}
+        filled: list[dict] = []
+        cur = s
+        while cur <= e:
+            iso = cur.isoformat()
+            if iso in existing:
+                filled.append(existing[iso])
+            else:
+                sums = await meals_repo.sum_macros_for_date(user_id=user_id, on_date=cur, tz=tz)
+                if any(v > 0 for v in sums.values()):
+                    filled.append({
+                        "date": iso,
+                        "kcal": float(sums["kcal"]),
+                        "protein_g": float(sums["protein_g"]),
+                        "fat_g": float(sums["fat_g"]),
+                        "carb_g": float(sums["carb_g"]),
+                    })
+            cur = cur + _td(days=1)
+        # sort by date
+        items = sorted(filled or items, key=lambda x: x["date"])  # prefer filled if any
         # averages
         n = max(1, len(items))
         avg = {
-            "kcal": round(sum(i["kcal"] for i in items) / n, 1) if items else 0.0,
-            "protein_g": round(sum(i["protein_g"] for i in items) / n, 1) if items else 0.0,
-            "fat_g": round(sum(i["fat_g"] for i in items) / n, 1) if items else 0.0,
-            "carb_g": round(sum(i["carb_g"] for i in items) / n, 1) if items else 0.0,
+            "kcal": round(sum(float(i.get("kcal", 0.0)) for i in items) / n, 1) if items else 0.0,
+            "protein_g": round(sum(float(i.get("protein_g", 0.0)) for i in items) / n, 1) if items else 0.0,
+            "fat_g": round(sum(float(i.get("fat_g", 0.0)) for i in items) / n, 1) if items else 0.0,
+            "carb_g": round(sum(float(i.get("carb_g", 0.0)) for i in items) / n, 1) if items else 0.0,
         }
         # variance (дисперсия)
         var = None
@@ -742,10 +878,11 @@ def create_app() -> FastAPI:
                 days = (e - s).days or 1
                 weight_pace_kg_per_week = round((w[-1]["weight_kg"] - w[0]["weight_kg"]) / days * 7.0, 2)
         data = {"items": items, "avg": avg, "variance": var, "compliance": comp, "weight_pace_kg_per_week": weight_pace_kg_per_week}
-        try:
-            await redis_client.setex(cache_key, 300, _json.dumps(data))
-        except Exception:
-            pass
+        if not no_cache:
+            try:
+                await redis_client.setex(cache_key, 300, _json.dumps(data))
+            except Exception:
+                pass
         return APIResponse(ok=True, data=data)
 
     @app.get("/api/summary/monthly", response_model=APIResponse)
@@ -1152,15 +1289,45 @@ def create_app() -> FastAPI:
         from infra.db.repositories.vision_inference_repo import VisionInferenceRepo
         vrepo = VisionInferenceRepo(session)
         items: list[dict] = []
+        clarifications: list[str] = []
         for iid in image_ids:
             inf = await vrepo.get_latest_by_image(image_id=iid)
             if inf and inf.get("response"):
-                items.extend(inf["response"].get("items", []))
-        return APIResponse(ok=True, data={"handle_image_id": image_ids[-1], "items": items})
+                resp = inf["response"]
+                items.extend(resp.get("items", []))
+                try:
+                    cl = (resp.get("quality") or {}).get("clarifications") or []
+                    if isinstance(cl, list):
+                        clarifications.extend([str(x) for x in cl if x])
+                except Exception:
+                    pass
+        # naive fusion: group identical names and sum amounts/macros
+        merged: dict[str, dict] = {}
+        for it in items:
+            key = (it.get("name") or "").strip().lower()
+            if not key:
+                continue
+            if key not in merged:
+                merged[key] = {**it}
+            else:
+                m = merged[key]
+                try:
+                    m["amount"] = float(m.get("amount", 0.0)) + float(it.get("amount", 0.0))
+                    m["kcal"] = float(m.get("kcal", 0.0)) + float(it.get("kcal", 0.0))
+                    m["protein_g"] = float(m.get("protein_g", 0.0)) + float(it.get("protein_g", 0.0))
+                    m["fat_g"] = float(m.get("fat_g", 0.0)) + float(it.get("fat_g", 0.0))
+                    m["carb_g"] = float(m.get("carb_g", 0.0)) + float(it.get("carb_g", 0.0))
+                except Exception:
+                    pass
+        fused = list(merged.values()) or items
+        # unique clarifications
+        if clarifications:
+            clarifications = sorted(list({c.strip(): None for c in clarifications}.keys()))
+        return APIResponse(ok=True, data={"handle_image_id": image_ids[-1], "items": fused, "clarifications": clarifications, "images_count": len(image_ids)})
 
     # Save photo inference as meal
     @app.post("/api/photos/{image_id}/save", response_model=APIResponse)
-    async def photo_save(image_id: int, telegram_id: int, session: AsyncSession = Depends(get_session)) -> APIResponse:
+    async def photo_save(image_id: int, telegram_id: int, tz: str | None = None, session: AsyncSession = Depends(get_session)) -> APIResponse:
         users = UserRepo(session)
         repo = MealRepo(session)
         from infra.db.repositories.vision_inference_repo import VisionInferenceRepo
@@ -1171,7 +1338,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="Inference not found")
         items = inf["response"].get("items", [])
         from datetime import datetime as DT, date as D
-        at = DT.utcnow()
+        at = DT.now(ZoneInfo("UTC"))
         meal_id = await repo.create_meal(
             user_id=user_id,
             at=at,
@@ -1181,7 +1348,11 @@ def create_app() -> FastAPI:
             status="confirmed",
             autocommit=False,
         )
-        d = D.fromisoformat(at.date().isoformat())
+        try:
+            tzname = tz or "Europe/Madrid"
+            d = at.astimezone(ZoneInfo(tzname)).date()
+        except Exception:
+            d = D.fromisoformat(at.date().isoformat())
         sums = await repo.sum_macros_for_date(user_id=user_id, on_date=d)
         await DailySummaryRepo(session).upsert_daily_summary(
             user_id=user_id, on_date=d, kcal=sums["kcal"], protein_g=sums["protein_g"], fat_g=sums["fat_g"], carb_g=sums["carb_g"], autocommit=False

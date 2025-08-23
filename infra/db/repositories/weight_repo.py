@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from sqlalchemy import insert, select
+from sqlalchemy import insert as sa_insert, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infra.db.models import Weight
@@ -13,11 +14,24 @@ class WeightRepo:
         self.session = session
 
     async def add_weight(self, *, user_id: int, on_date: date, weight_kg: float) -> None:
-        await self.session.execute(
-            insert(Weight)
-            .values(user_id=user_id, date=on_date, weight_kg=weight_kg)
-            .on_conflict_do_nothing(index_elements=[Weight.user_id, Weight.date])
+        # Upsert: если запись за дату существует — обновляем weight_kg; иначе — вставляем
+        stmt = pg_insert(Weight).values(user_id=user_id, date=on_date, weight_kg=weight_kg)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[Weight.user_id, Weight.date],
+            set_={"weight_kg": weight_kg},
         )
+        try:
+            await self.session.execute(stmt)
+        except Exception:
+            # Fallback для нестандартных диалектов: попытка update → если 0 строк, то insert
+            res = await self.session.execute(
+                update(Weight)
+                .where(Weight.user_id == user_id, Weight.date == on_date)
+                .values(weight_kg=weight_kg)
+                .returning(Weight.id)
+            )
+            if res.first() is None:
+                await self.session.execute(sa_insert(Weight).values(user_id=user_id, date=on_date, weight_kg=weight_kg))
         await self.session.commit()
 
     async def get_last(self, *, user_id: int) -> float | None:

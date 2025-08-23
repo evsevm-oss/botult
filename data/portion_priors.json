@@ -1,0 +1,19 @@
+{
+  "pizza": {
+    "slice_small_g": 90,
+    "slice_medium_g": 120,
+    "slice_large_g": 160,
+    "whole_30cm_g": 950,
+    "density_g_per_cm2": 0.95
+  },
+  "egg": { "piece_g": 55 },
+  "banana": { "piece_g": 130 },
+  "burger": { "piece_g": 220 },
+  "sushi_roll": { "piece_g": 30, "roll_8_pcs_g": 240 },
+  "salad": { "portion_g": 200 },
+  "soup": { "bowl_ml": 300 },
+  "meat": { "portion_g": 180 },
+  "fish": { "portion_g": 180 },
+  "bakery": { "croissant_g": 60 }
+}
+

@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     moderation_enabled: bool = Field(True, alias="MODERATION_ENABLED")
     did_api_key: str | None = Field(None, alias="DID_API_KEY")
 
+    # Cost approximations for metrics (USD)
+    openai_cost_vision_per_image: float = Field(0.003, alias="OPENAI_COST_VISION_PER_IMAGE")
+    openai_cost_normalize_per_req: float = Field(0.0008, alias="OPENAI_COST_NORMALIZE_PER_REQ")
+
     # Storage / DB / Cache
     database_url: str = Field(..., alias="DATABASE_URL")
     redis_url: str = Field("redis://localhost:6379/0", alias="REDIS_URL")

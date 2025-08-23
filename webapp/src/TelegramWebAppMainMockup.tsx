@@ -78,6 +78,11 @@ const RootStyles: React.FC = () => (
     .main-gradient { background: radial-gradient(1200px 400px at 50% -10%, rgba(99,102,241,0.25), transparent), radial-gradient(800px 300px at 0% 10%, rgba(147,51,234,0.15), transparent), radial-gradient(800px 300px at 100% 10%, rgba(56,189,248,0.12), transparent); }
     .chart-wrap{position:relative}
     .chart-labels{position:absolute; top:8px; left:8px; right:8px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; pointer-events:none}
+    @media (max-width: 420px){
+      .chart-labels{ right:auto; justify-content:flex-start; align-items:flex-start; flex-direction:column; gap:6px }
+      .chart-labels .pill{ font-size:11px; padding:2px 8px }
+      .pill-extra{ display:none }
+    }
     .skeleton { position: relative; overflow: hidden; background: rgba(255,255,255,0.06); }
     .skeleton::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent); transform: translateX(-100%); animation: sk 1.4s infinite; }
     @keyframes sk { 100% { transform: translateX(100%); } }
@@ -174,15 +179,8 @@ const RootStyles: React.FC = () => (
 );
 
 // Демоданные
-const last7 = [
-  { d: "Пн", kcal: 1820, protein: 110 },
-  { d: "Вт", kcal: 2050, protein: 118 },
-  { d: "Ср", kcal: 1760, protein: 124 },
-  { d: "Чт", kcal: 1900, protein: 130 },
-  { d: "Пт", kcal: 1990, protein: 98 },
-  { d: "Сб", kcal: 2100, protein: 140 },
-  { d: "Вс", kcal: 1720, protein: 122 },
-];
+// Демо-данные удалены: показываем только реальные данные, если они есть
+const last7: { d: string; kcal: number; protein: number }[] = [];
 
 const foods = [
   { name: "Starbucks Cappuccino (Grande)", kcal: 540 },
@@ -334,42 +332,23 @@ const MainInfo: React.FC<MainInfoProps> = ({ values, onEditGoal, onEditCalories,
 
 // --- Данные для графика веса/жира ---
 interface WFPoint { x: string; d: string; weight: number; fat: number; }
-const genWeightFat = (days: number): WFPoint[] => {
-  const now = new Date();
-  const res: WFPoint[] = [];
-  const weightToday = 68.0;
-  const fatToday = 24.8;
-  const wSlope = 5 / 365;
-  const fSlope = 1.2 / 365;
-  for (let j = 0; j < days; j++) {
-    const k = days - 1 - j; // дней назад
-    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - k);
-    const iso = date.toISOString().slice(0, 10);
-    const dd = String(date.getDate()).padStart(2, '0');
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const label = days <= 30
-      ? dd
-      : days <= 120
-        ? `${dd}.${mm}`
-        : date.toLocaleDateString('ru-RU', { month: 'short' });
-    const weight = +(weightToday + wSlope * (days - 1 - j) + Math.sin(j / 6) * 0.05).toFixed(1);
-    const fat = +(fatToday + fSlope * (days - 1 - j) + Math.cos(j / 7) * 0.03).toFixed(2);
-    res.push({ x: iso, d: label, weight, fat });
-  }
-  return res;
-};
+const genWeightFat = (_days: number): WFPoint[] => [];
 
 const WeightFatWidget: React.FC<{ initial?: WFPoint[] }> = ({ initial }) => {
   const [period, setPeriod] = useState<'week'|'month'|'q'|'year'>('month');
-  const daysMap = { week: 7, month: 30, q: 90, year: 365 } as const;
-  const data = useMemo(() => initial && initial.length ? initial : genWeightFat(daysMap[period]), [period, initial]);
+  const data = useMemo(() => (initial && initial.length) ? initial : [], [initial, period]);
 
-  const wMin = Math.min(...data.map(p => p.weight));
-  const wMax = Math.max(...data.map(p => p.weight));
-  const fMin = Math.min(...data.map(p => p.fat));
-  const fMax = Math.max(...data.map(p => p.fat));
-  const leftDomain: [number, number] = [Math.floor(wMin), Math.ceil(wMax)];
-  const rightDomain: [number, number] = [Math.floor(fMin), Math.ceil(fMax)];
+  const hasData = data.length > 0;
+  let leftDomain: [number, number] | undefined;
+  let rightDomain: [number, number] | undefined;
+  if (hasData) {
+    const wMin = Math.min(...data.map(p => p.weight));
+    const wMax = Math.max(...data.map(p => p.weight));
+    const fMin = Math.min(...data.map(p => p.fat));
+    const fMax = Math.max(...data.map(p => p.fat));
+    leftDomain = [Math.floor(wMin), Math.ceil(wMax)];
+    rightDomain = [Math.floor(fMin), Math.ceil(fMax)];
+  }
 
   return (
     <Card
@@ -384,32 +363,35 @@ const WeightFatWidget: React.FC<{ initial?: WFPoint[] }> = ({ initial }) => {
       }
     >
       <div style={{ width: '100%', height: 220 }}>
-        <ResponsiveContainer>
-          <LineChart data={data} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
-            <CartesianGrid stroke="var(--chart-grid)" />
-            <XAxis dataKey="d" tick={{ fill: 'var(--muted)' }} interval="preserveStartEnd" />
-            <YAxis yAxisId="left" orientation="left" tick={{ fill: 'var(--muted)' }} domain={leftDomain} />
-            <YAxis yAxisId="right" orientation="right" tick={{ fill: 'var(--muted)' }} domain={rightDomain} />
-            <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: 'var(--text)' }} />
-            <Legend wrapperStyle={{ color: 'var(--muted)' }} />
-            <Line yAxisId="left" type="monotone" dataKey="weight" name="Вес (кг)" stroke="#a78bfa" strokeWidth={2.5} dot={false} />
-            <Line yAxisId="right" type="monotone" dataKey="fat" name="Жир (%)" stroke="#38bdf8" strokeWidth={2.5} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
+        {hasData ? (
+          <ResponsiveContainer>
+            <LineChart data={data} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
+              <CartesianGrid stroke="var(--chart-grid)" />
+              <XAxis dataKey="d" tick={{ fill: 'var(--muted)' }} interval="preserveStartEnd" />
+              <YAxis yAxisId="left" orientation="left" tick={{ fill: 'var(--muted)' }} domain={leftDomain as [number, number]} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fill: 'var(--muted)' }} domain={rightDomain as [number, number]} />
+              <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: 'var(--text)' }} />
+              <Legend wrapperStyle={{ color: 'var(--muted)' }} />
+              <Line yAxisId="left" type="monotone" dataKey="weight" name="Вес (кг)" stroke="#a78bfa" strokeWidth={2.5} dot={false} />
+              <Line yAxisId="right" type="monotone" dataKey="fat" name="Жир (%)" stroke="#38bdf8" strokeWidth={2.5} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : null}
       </div>
     </Card>
   );
 };
 
-const CaloriesProteinWidget: React.FC<{ weekly?: { d: string; kcal: number; protein: number; }[] }> = ({ weekly }) => {
-  const CAL_PLAN = 1950;
-  const PROT_PLAN = 120; // граммы
+const CaloriesProteinWidget: React.FC<{ weekly?: { d: string; kcal: number; protein: number; }[]; calPlan?: number; protPlan?: number; }>
+  = ({ weekly, calPlan, protPlan }) => {
+  const CAL_PLAN = Number.isFinite(calPlan as number) && (calPlan as number) > 0 ? Number(calPlan) : 0;
+  const PROT_PLAN = Number.isFinite(protPlan as number) && (protPlan as number) > 0 ? Number(protPlan) : 0; // граммы
 
-  const series = weekly && weekly.length ? weekly : last7;
-  const maxK = useMemo(() => Math.max(...series.map(x => x.kcal), CAL_PLAN), [series]);
-  const maxP = useMemo(() => Math.max(...series.map(x => x.protein), PROT_PLAN), [series]);
-  const yLeftMax = useMemo(() => Math.ceil((maxK * 1.6) / 50) * 50, [maxK]);
-  const yRightMax = useMemo(() => Math.ceil((maxP * 1.6) / 5) * 5, [maxP]);
+  const series = weekly && weekly.length ? weekly : [];
+  const maxK = useMemo(() => (series.length ? Math.max(...series.map(x => x.kcal), CAL_PLAN || 0) : (CAL_PLAN || 0)), [series, CAL_PLAN]);
+  const maxP = useMemo(() => (series.length ? Math.max(...series.map(x => x.protein), PROT_PLAN || 0) : (PROT_PLAN || 0)), [series, PROT_PLAN]);
+  const yLeftMax = useMemo(() => Math.max(0, Math.ceil(((maxK || 0) * 1.6) / 50) * 50), [maxK]);
+  const yRightMax = useMemo(() => Math.max(0, Math.ceil(((maxP || 0) * 1.6) / 5) * 5), [maxP]);
 
   const avg = useMemo(() => {
     const ak = series.reduce((s, x) => s + x.kcal, 0) / series.length;
@@ -420,37 +402,50 @@ const CaloriesProteinWidget: React.FC<{ weekly?: { d: string; kcal: number; prot
   return (
     <Card title="Потребление калорий и протеина" className="mb-3">
       <div className="chart-wrap" style={{ width: '100%', height: 240 }}>
-        <div className="chart-labels">
-          <span className="pill">План калорий 1950</span>
-          <span className="pill">План протеина 120</span>
-          {typeof weeklyCompliance === 'number' && <span className="pill">Комплаенс {weeklyCompliance}%</span>}
-          {typeof weightPace === 'number' && <span className="pill">Темп веса {weightPace} кг/нед</span>}
-        </div>
-        <ResponsiveContainer>
-          <BarChart data={series} margin={{ left: 8, right: 8, top: 8, bottom: 0 }} barCategoryGap="28%">
-            <CartesianGrid stroke="var(--chart-grid)" />
-            <XAxis dataKey="d" tick={{ fill: 'var(--muted)' }} />
-            <YAxis yAxisId="left" tick={{ fill: 'var(--muted)' }} domain={[0, yLeftMax]} />
-            <YAxis yAxisId="right" orientation="right" tick={{ fill: 'var(--muted)' }} domain={[0, yRightMax]} />
-            <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: 'var(--text)' }} />
-            <Legend wrapperStyle={{ color: 'var(--muted)' }} />
-            <ReferenceLine yAxisId="left" y={CAL_PLAN} stroke="#a78bfa" strokeDasharray="4 4" />
-            <ReferenceLine yAxisId="right" y={PROT_PLAN} stroke="#38bdf8" strokeDasharray="4 4" />
-            <Bar yAxisId="left" dataKey="kcal" name="Калории" fill="#8b5cf6" radius={[6,6,0,0]} barSize={18} />
-            <Bar yAxisId="right" dataKey="protein" name="Протеин (г)" fill="#22d3ee" radius={[6,6,0,0]} barSize={18} />
-          </BarChart>
-        </ResponsiveContainer>
+        {series.length ? (
+          <>
+            <div className="chart-labels">
+              {CAL_PLAN > 0 && <span className="pill">План калорий {CAL_PLAN}</span>}
+              {PROT_PLAN > 0 && <span className="pill">План протеина {PROT_PLAN}</span>}
+            </div>
+            <ResponsiveContainer>
+              <BarChart data={series} margin={{ left: 8, right: 8, top: 24, bottom: 0 }} barCategoryGap="28%">
+                <CartesianGrid stroke="var(--chart-grid)" />
+                <XAxis dataKey="d" tick={{ fill: 'var(--muted)' }} interval="preserveStartEnd" />
+                <YAxis yAxisId="left" tick={{ fill: 'var(--muted)' }} domain={[0, yLeftMax]} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fill: 'var(--muted)' }} domain={[0, yRightMax]} />
+                <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: 'var(--text)' }} />
+                <Legend wrapperStyle={{ color: 'var(--muted)' }} />
+                {CAL_PLAN > 0 && <ReferenceLine yAxisId="left" y={CAL_PLAN} stroke="#a78bfa" strokeDasharray="4 4" />}
+                {PROT_PLAN > 0 && <ReferenceLine yAxisId="right" y={PROT_PLAN} stroke="#38bdf8" strokeDasharray="4 4" />}
+                <Bar yAxisId="left" dataKey="kcal" name="Калории" fill="#8b5cf6" radius={[6,6,0,0]} barSize={18} />
+                <Bar yAxisId="right" dataKey="protein" name="Протеин (г)" fill="#22d3ee" radius={[6,6,0,0]} barSize={18} />
+              </BarChart>
+            </ResponsiveContainer>
+          </>
+        ) : (
+          <ResponsiveContainer>
+            <BarChart data={[]} margin={{ left: 8, right: 8, top: 24, bottom: 0 }}>
+              <CartesianGrid stroke="var(--chart-grid)" />
+              <XAxis dataKey="d" tick={{ fill: 'var(--muted)' }} />
+              <YAxis yAxisId="left" tick={{ fill: 'var(--muted)' }} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fill: 'var(--muted)' }} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <div className="glass p-3 rounded-lg">
-          <div className="subtle text-sm">Среднедневное за 7 дней (ккал)</div>
-          <div className="mono text-lg">{nf(avg.ak)}</div>
+      {series.length ? (
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="glass p-3 rounded-lg">
+            <div className="subtle text-sm">Среднедневное за 7 дней (ккал)</div>
+            <div className="mono text-lg">{nf(avg.ak)}</div>
+          </div>
+          <div className="glass p-3 rounded-lg">
+            <div className="subtle text-sm">Среднедневное за 7 дней (протеин, г)</div>
+            <div className="mono text-lg">{nf(avg.ap)}</div>
+          </div>
         </div>
-        <div className="glass p-3 rounded-lg">
-          <div className="subtle text-sm">Среднедневное за 7 дней (протеин, г)</div>
-          <div className="mono text-lg">{nf(avg.ap)}</div>
-        </div>
-      </div>
+      ) : null}
     </Card>
   );
 };
@@ -535,7 +530,10 @@ const todayISO = (): string => toISODateLocal(new Date());
 const fmtDateRU = (iso: string): string => {
   if (!iso) return '';
   const d = parseISODateLocal(iso);
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}.${mm}.${yyyy}`;
 };
 const makeRangeLabel = (startISO: string, endISO: string): string => `${fmtDateRU(startISO)} – ${fmtDateRU(endISO)}`;
 const isInvalidRange = (startISO: string, endISO: string): boolean => !endISO || (startISO && endISO < startISO);
@@ -679,8 +677,20 @@ export default function TelegramWebAppMainMockup() {
   const [tmpText1, setTmpText1] = useState('');
   const [tmpStartISO, setTmpStartISO] = useState<string>(todayISO());
   const [tmpEndISO, setTmpEndISO] = useState<string>('');
-  const [tmpGender, setTmpGender] = useState<'male'|'female'|'other'>('male');
-  const [tmpHeightCm, setTmpHeightCm] = useState<string>('');
+  const [tmpGender, setTmpGender] = useState<'male'|'female'|'other'>(() => {
+    try {
+      const v = localStorage.getItem('prefs.bf.gender');
+      if (v === 'male' || v === 'female' || v === 'other') return v as 'male'|'female'|'other';
+    } catch {}
+    return 'male';
+  });
+  const [tmpHeightCm, setTmpHeightCm] = useState<string>(() => {
+    try {
+      const v = localStorage.getItem('prefs.bf.height_cm');
+      if (v && String(v).length > 0) return String(v);
+    } catch {}
+    return '';
+  });
   const [tmpWeightKg, setTmpWeightKg] = useState<string>(String(weight));
   const [tmpWaistCm, setTmpWaistCm] = useState<string>('');
   const [tmpNeckCm, setTmpNeckCm] = useState<string>('');
@@ -699,11 +709,7 @@ export default function TelegramWebAppMainMockup() {
       range = makeRangeLabel(tmpStartISO, tmpEndISO);
     } else if (hasStart) {
       range = `с ${fmtDateRU(tmpStartISO)}`;
-    } else if (hasEnd) {
-      range = `до ${fmtDateRU(tmpEndISO)}`;
-    } else {
-      range = '';
-    }
+    } // если указан только конец — не отображаем
     setDateRange(range);
     // persist & сброс планов калорий/протеина
     try {
@@ -713,6 +719,14 @@ export default function TelegramWebAppMainMockup() {
       setCalPlan(NaN); setProtPlan(NaN);
       localStorage.removeItem('profile.calPlan');
       localStorage.removeItem('profile.protPlan');
+    } catch {}
+    // Trigger Telegram notification with strategy video (best-effort, без всплывающих предупреждений)
+    try {
+      const tgId = getTelegramId();
+      if (tgId) {
+        const mode = goalMode === 'loss' ? 'loss' : (goalMode === 'maint' ? 'maint' : (goalMode === 'gain' ? 'gain' : 'nocw'));
+        apiFetch(`/api/goal-notify?telegram_id=${tgId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }) }).catch(()=>{});
+      }
     } catch {}
     close();
   };
@@ -724,31 +738,74 @@ export default function TelegramWebAppMainMockup() {
   const saveProt = () => { const v = parseInt(tmpText1, 10); if (!Number.isNaN(v) && v > 0) { setProtPlan(v); try { localStorage.setItem('profile.protPlan', String(v)); } catch {} } close(); };
 
   const openWeight = () => { setTmpText1(String(weight)); setModal({ type: 'weight' }); };
-  const saveWeight = () => { const v = Number(tmpText1); if (!Number.isNaN(v) && v > 0) { const d = todayISO(); setWeightsByDate(m => { const nm = { ...m, [d]: v }; try { localStorage.setItem('profile.weightsByDate', JSON.stringify(nm)); } catch {} return nm; }); } close(); };
+  const saveWeight = async () => {
+    const v = Number(tmpText1);
+    if (!Number.isNaN(v) && v > 0) {
+      const d = todayISO();
+      setWeightsByDate(m => { const nm = { ...m, [d]: v }; try { localStorage.setItem('profile.weightsByDate', JSON.stringify(nm)); } catch {} return nm; });
+      // send to server
+      const tgId = getTelegramId();
+      if (tgId) {
+        try {
+          await apiFetch(`/api/weights?telegram_id=${tgId}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date: d, weight_kg: v })
+          });
+        } catch {}
+      }
+    }
+    close();
+    // refresh charts after slight delay
+    setTimeout(() => { fetchAll(); }, 50);
+  };
 
-  const openFat = () => { setTmpGender('male'); setTmpHeightCm(''); setTmpWeightKg(String(weight)); setTmpWaistCm(''); setTmpNeckCm(''); setModal({ type: 'fat' }); };
-  const saveFat = () => {
+  const openFat = () => {
+    try {
+      const g = localStorage.getItem('prefs.bf.gender');
+      if (g === 'male' || g === 'female' || g === 'other') setTmpGender(g as 'male'|'female'|'other');
+      else setTmpGender('male');
+    } catch { setTmpGender('male'); }
+    try {
+      const h = localStorage.getItem('prefs.bf.height_cm');
+      setTmpHeightCm(h && h.length ? h : '');
+    } catch { setTmpHeightCm(''); }
+    setTmpWeightKg(String(weight));
+    setTmpWaistCm('');
+    setTmpNeckCm('');
+    setModal({ type: 'fat' });
+  };
+  const saveFat = async () => {
     const bf = computeBodyFat(tmpGender, parseNum(tmpHeightCm), parseNum(tmpWeightKg), parseNum(tmpWaistCm), parseNum(tmpNeckCm));
     if (bf != null && isFinite(bf) && bf >= 0) {
       const val = Math.round(bf * 10) / 10;
       const d = todayISO();
       setFatByDate(m => { const nm = { ...m, [d]: val }; try { localStorage.setItem('profile.fatByDate', JSON.stringify(nm)); } catch {} return nm; });
+      // persist user prefs locally for next time
+      try {
+        localStorage.setItem('prefs.bf.gender', tmpGender);
+        const h = String(tmpHeightCm || '');
+        if (h && Number(parseNum(h)) > 0) localStorage.setItem('prefs.bf.height_cm', h);
+      } catch {}
       // send to server
       const tgId = getTelegramId();
       if (tgId) {
         const today = todayISO();
-        apiFetch(`/api/bodyfat?telegram_id=${tgId}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ date: today, percent: val })
-        }).catch(() => {});
+        try {
+          await apiFetch(`/api/bodyfat?telegram_id=${tgId}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date: today, percent: val })
+          });
+        } catch {}
       }
     }
     close();
+    setTimeout(() => { fetchAll(); }, 50);
   };
 
   // Дневник (стабильная версия: один список, дата для навигации)
   const [diaryDateISO, setDiaryDateISO] = useState<string>(todayISO());
-  const [foodList, setFoodList] = useState<Food[]>(() => foods.map(f => ({ ...f, protein: 0, weight: 0 })));
+  const [foodList, setFoodList] = useState<Food[]>([]);
+  const [kcalTodayTotal, setKcalTodayTotal] = useState<number>(0);
   const diaryRef = useRef<HTMLDivElement | null>(null);
   const openDiaryDate = () => { setTmpStartISO(diaryDateISO); setModal({ type: 'diary-date' }); };
   const saveDiaryDate = () => { if (tmpStartISO) setDiaryDateISO(tmpStartISO); close(); };
@@ -759,7 +816,9 @@ export default function TelegramWebAppMainMockup() {
   const [tmpFoodWeight, setTmpFoodWeight] = useState<string>('0');
   const [tmpFoodProtein, setTmpFoodProtein] = useState<string>('0');
   const [tmpFoodKcal, setTmpFoodKcal] = useState<string>('0');
-  const openFoodEdit = (i: number) => { const f = foodList[i]; if (!f) return; setEditIndex(i); setTmpFoodName(f.name); setTmpFoodWeight(String(f.weight ?? 0)); setTmpFoodProtein(String(f.protein ?? 0)); setTmpFoodKcal(String(f.kcal)); setModal({ type: 'food-edit' }); };
+  const [tmpFoodFat, setTmpFoodFat] = useState<string>('0');
+  const [tmpFoodCarb, setTmpFoodCarb] = useState<string>('0');
+  const openFoodEdit = (i: number) => { const f = foodList[i]; if (!f) return; setEditIndex(i); setTmpFoodName(f.name); setTmpFoodWeight(String(f.weight ?? 0)); setTmpFoodProtein(String(f.protein ?? 0)); setTmpFoodKcal(String(f.kcal)); setTmpFoodFat(String(f.fat_g ?? 0)); setTmpFoodCarb(String(f.carb_g ?? 0)); setModal({ type: 'food-edit' }); };
   const saveFoodEdit = async () => {
     if (editIndex < 0) return close();
     const edited = foodList[editIndex];
@@ -772,6 +831,8 @@ export default function TelegramWebAppMainMockup() {
       weight: Number(tmpFoodWeight)||0,
       protein: Number(tmpFoodProtein)||0,
       kcal: Number(tmpFoodKcal)||Number(edited.kcal||0),
+      fat_g: Number(tmpFoodFat)||0,
+      carb_g: Number(tmpFoodCarb)||0,
     };
     const itemsForMeal = foodList.filter(x => x.mealId === edited.mealId).map(x => ({
       name: x === edited ? updatedItem.name : x.name,
@@ -779,8 +840,8 @@ export default function TelegramWebAppMainMockup() {
       amount: x === edited ? (updatedItem.weight||0) : (x.weight||0),
       kcal: x === edited ? (updatedItem.kcal||0) : (x.kcal||0),
       protein_g: x === edited ? (updatedItem.protein||0) : (x.protein||0),
-      fat_g: x.fat_g || 0,
-      carb_g: x.carb_g || 0,
+      fat_g: x === edited ? (updatedItem.fat_g||0) : (x.fat_g||0),
+      carb_g: x === edited ? (updatedItem.carb_g||0) : (x.carb_g||0),
     }));
     await apiFetch(`/api/meals/${edited.mealId}?telegram_id=${tgId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: itemsForMeal }) });
     close();
@@ -805,9 +866,8 @@ export default function TelegramWebAppMainMockup() {
     await fetchAll();
   };
 
-  const kcalToday = useMemo(() => foodList.reduce((s, f) => s + (Number(f.kcal)||0), 0), [foodList]);
   const values = { goalTitle, goalNote, dateRange, calPlan, protPlan, weight, weightDelta, fatPct, fatDelta };
-  const mainButtonLabel = makeMainButtonLabel(kcalToday);
+  const mainButtonLabel = makeMainButtonLabel(Math.round(kcalTodayTotal));
 
   // Backend integrations: load weekly summary and meals
   const [weeklySeries, setWeeklySeries] = useState<{ d: string; kcal: number; protein: number }[] | null>(null);
@@ -828,35 +888,53 @@ export default function TelegramWebAppMainMockup() {
     } catch {}
   }, []);
 
+  // Debug overlay (temporary) — shows tgId and basic fetch statuses
+  const [dbg, setDbg] = useState<{ tgId: number | null; weekly: string; weights: string; bodyfat: string; meals: string } | null>(null);
+
   const fetchAll = useCallback(async () => {
       try {
         setMbState('loading');
         const tgId = getTelegramId();
         if (!tgId) { setLoading(false); return; }
+        let anyOk = false;
         // Weekly summary: use /api/summary/weekly to derive bars; optionally fetch /api/weights for WF graph later
         const today = new Date();
         const daySpan = periodFilter==='week' ? 6 : (periodFilter==='month' ? 29 : (periodFilter==='q' ? 89 : 364));
-        const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - daySpan).toISOString().slice(0,10);
-        const r1 = await apiFetch(`/api/summary/weekly?telegram_id=${tgId}&start=${start}&tz=${encodeURIComponent(tz)}`);
+        // Use local date, not UTC toISOString, to avoid shifting window and losing today in CEST
+        const start = toISODateLocal(new Date(today.getFullYear(), today.getMonth(), today.getDate() - daySpan));
+        const r1 = await apiFetch(`/api/summary/weekly?telegram_id=${tgId}&start=${start}&tz=${encodeURIComponent(tz)}&no_cache=1&_=${Date.now()}`);
         const b1 = await r1.json();
+        let weeklySer: { d: string; kcal: number; protein: number }[] = [];
         if (b1?.ok && Array.isArray(b1?.data?.items)) {
           const items = b1.data.items as { date: string; kcal: number; protein_g: number }[];
-          const ser = items.map(it => ({ d: it.date.slice(5), kcal: Number(it.kcal||0), protein: Number(it.protein_g||0) }));
-          setWeeklySeries(ser);
+          weeklySer = items.map(it => ({ d: it.date.slice(5), kcal: Number(it.kcal||0), protein: Number(it.protein_g||0) }));
           setWeeklyCompliance((b1.data.compliance && b1.data.compliance.score) || null);
           setWeightPace((b1.data.weight_pace_kg_per_week != null) ? Number(b1.data.weight_pace_kg_per_week) : null);
+          anyOk = true;
         }
-        // Optionally, fetch weights to populate WF graph
-        const r3 = await apiFetch(`/api/weights?telegram_id=${tgId}&start=${start}`);
+        // Weights
+        const r3 = await apiFetch(`/api/weights?telegram_id=${tgId}&start=${start}&_=${Date.now()}`);
         const b3 = await r3.json();
+        let wf: WFPoint[] = [];
         if (b3?.ok && Array.isArray(b3?.data?.items)) {
           const items = b3.data.items as { date: string; weight_kg: number }[];
-          const wf = items.map((it) => ({ x: it.date, d: it.date.slice(5), weight: Number(it.weight_kg||0), fat: NaN as unknown as number }));
-          // keep fat series empty for now; UI will only plot weight when fat NaN
-          setWfSeries(wf);
+          wf = items.map((it) => ({ x: it.date, d: it.date.slice(5), weight: Number(it.weight_kg||0), fat: Number.NaN }));
+          anyOk = true;
         }
+        // Bodyfat (optional)
+        try {
+          const bfRes = await apiFetch(`/api/bodyfat?telegram_id=${tgId}&start=${start}&_=${Date.now()}`);
+          const bf = await bfRes.json();
+          if (bf?.ok && Array.isArray(bf?.data?.items) && wf.length) {
+            const map: Record<string, number> = {};
+            (bf.data.items as { date: string; percent: number }[]).forEach(it => { map[it.date] = Number(it.percent||0) });
+            wf = wf.map(p => ({ ...p, fat: (map[p.x] != null ? Number(map[p.x]) : Number.NaN) as unknown as number }));
+            anyOk = true;
+          }
+        } catch {}
+        setWfSeries(wf);
         // Meals for selected date
-        const r2 = await apiFetch(`/api/meals?telegram_id=${tgId}&date=${diaryDateISO}&tz=${encodeURIComponent(tz)}`);
+        const r2 = await apiFetch(`/api/meals?telegram_id=${tgId}&date=${diaryDateISO}&tz=${encodeURIComponent(tz)}&_=${Date.now()}`);
         const b2 = await r2.json();
         if (b2?.ok && Array.isArray(b2?.data?.items)) {
           const meals = b2.data.items as any[];
@@ -864,9 +942,47 @@ export default function TelegramWebAppMainMockup() {
           meals.forEach((m: any) => {
             (m.items || []).forEach((it: any) => list.push({ name: it.name, kcal: Number(it.kcal||0), protein: Number(it.protein_g||0), weight: Number(it.amount||0), mealId: m.id, itemId: it.id, unit: it.unit || 'g', fat_g: Number(it.fat_g||0), carb_g: Number(it.carb_g||0) }));
           });
-          if (list.length) setFoodList(list);
+          setFoodList(list);
+          anyOk = true;
+          // fallback для графика потребления, если weekly пуст
+          const dayK = list.reduce((s, x) => s + (Number(x.kcal)||0), 0);
+          const dayP = list.reduce((s, x) => s + (Number(x.protein)||0), 0);
+          const hasWeekly = weeklySer.length > 0 && weeklySer.some(x => x.kcal > 0 || x.protein > 0);
+          const todayIso = todayISO();
+          const todayKey = todayIso.slice(5);
+          // Если weekly уже есть, но нет колонки за сегодня — добавим её из дневника
+          if (hasWeekly) {
+            const hasToday = weeklySer.some(x => x.d === todayKey);
+            if (!hasToday && diaryDateISO === todayIso && (dayK > 0 || dayP > 0)) {
+              weeklySer = [...weeklySer, { d: todayKey, kcal: dayK, protein: dayP }]
+                .sort((a,b) => a.d.localeCompare(b.d));
+            }
+          } else if (dayK > 0 || dayP > 0) {
+            weeklySer = [{ d: diaryDateISO.slice(5), kcal: dayK, protein: dayP }];
+          }
+        } else {
+          setFoodList([]);
         }
-        setOffline(false);
+        setWeeklySeries(weeklySer);
+        // Today kcal for bottom button (from server summary, fallback to local if current day is open)
+        try {
+          const todayIso = todayISO();
+          const rs = await apiFetch(`/api/summary/daily?telegram_id=${tgId}&date=${todayIso}&tz=${encodeURIComponent(tz)}&no_cache=1&_=${Date.now()}`);
+          const bs = await rs.json();
+          if (bs?.ok && bs?.data?.consumed) {
+            setKcalTodayTotal(Number(bs.data.consumed.kcal || 0));
+            anyOk = true;
+          } else if (diaryDateISO === todayIso) {
+            setKcalTodayTotal((foodList || []).reduce((s, f) => s + (Number(f.kcal) || 0), 0));
+          }
+        } catch {
+          const todayIso = todayISO();
+          if (diaryDateISO === todayIso) {
+            setKcalTodayTotal((foodList || []).reduce((s, f) => s + (Number(f.kcal) || 0), 0));
+          }
+        }
+        setOffline(!anyOk && navigator.onLine === false ? true : false);
+        setDbg({ tgId, weekly: b1?.ok ? 'ok' : 'fail', weights: b3?.ok ? 'ok' : 'fail', bodyfat: (typeof (window as any).__bfok !== 'undefined') ? String((window as any).__bfok) : (b3?.ok ? 'ok' : 'fail'), meals: b2?.ok ? 'ok' : 'fail' });
       } catch {
         setOffline(true);
       } finally {
@@ -880,6 +996,15 @@ export default function TelegramWebAppMainMockup() {
   return (
     <div className="container px-3">
       <RootStyles />
+
+      {/* Debug overlay */}
+      {(() => { try { const usp = new URLSearchParams(window.location.search); if (usp.get('debug') === '1' && dbg) { return (
+        <div className="card p-3 mb-3" style={{borderLeft: '4px solid #38bdf8'}}>
+          <div className="h2 mb-1">Debug</div>
+          <div className="mono text-sm">tgId: {String(dbg.tgId)}</div>
+          <div className="mono text-sm">weekly: {dbg.weekly} • weights: {dbg.weights} • bodyfat: {dbg.bodyfat} • meals: {dbg.meals}</div>
+        </div>
+      ); } } catch {} return null; })()}
 
       {offline && (
         <div className="card p-3 mb-3 border-l-4" style={{ borderLeftColor: 'var(--warn)' }} role="status">
@@ -928,7 +1053,7 @@ export default function TelegramWebAppMainMockup() {
                 <div className="skeleton h-16 rounded"></div>
               </div>
             </div>
-          ) : <CaloriesProteinWidget weekly={weeklySeries || undefined} />}
+          ) : <CaloriesProteinWidget weekly={weeklySeries || undefined} calPlan={Number.isFinite(calPlan)?calPlan:undefined} protPlan={Number.isFinite(protPlan)?protPlan:undefined} />}
         </div>
 
         {/* Правая колонка */}
@@ -1095,6 +1220,8 @@ export default function TelegramWebAppMainMockup() {
               <div className="field"><label className="subtle text-sm">Вес, г</label><input className="input" type="number" inputMode="numeric" value={tmpFoodWeight} onChange={e=>setTmpFoodWeight(e.target.value)} placeholder="0" /></div>
               <div className="field"><label className="subtle text-sm">Протеин, г</label><input className="input" type="number" inputMode="numeric" value={tmpFoodProtein} onChange={e=>setTmpFoodProtein(e.target.value)} placeholder="0" /></div>
               <div className="field"><label className="subtle text-sm">Калории</label><input className="input" type="number" inputMode="numeric" value={tmpFoodKcal} onChange={e=>setTmpFoodKcal(e.target.value)} placeholder="0" /></div>
+              <div className="field"><label className="subtle text-sm">Жиры, г</label><input className="input" type="number" inputMode="numeric" value={tmpFoodFat} onChange={e=>setTmpFoodFat(e.target.value)} placeholder="0" /></div>
+              <div className="field"><label className="subtle text-sm">Углеводы, г</label><input className="input" type="number" inputMode="numeric" value={tmpFoodCarb} onChange={e=>setTmpFoodCarb(e.target.value)} placeholder="0" /></div>
             </div>
           </Modal>
         )}

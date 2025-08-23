@@ -8,9 +8,24 @@ from core.config import settings
 
 
 VISION_PROMPT = (
-    "Распознайте блюдо(а) на фото и верните JSON со списком items: "
-    "[{name, amount, unit: g|ml|piece, kcal, protein_g, fat_g, carb_g, confidence}]. "
-    "Если есть неопределенность — needs_clarification=true и список clarifications."
+    "Роль: Эксперт по распознаванию еды.\n"
+    "Задача: Определи блюда/продукты на фото и оцени количество и БЖУ.\n"
+    "Верни строго JSON объект вида: {\n"
+    "  \"items\": [{\n"
+    "    \"name\": string, \"unit\": one of g|ml|piece, \"amount\": number,\n"
+    "    \"kcal\": number, \"protein_g\": number, \"fat_g\": number, \"carb_g\": number,\n"
+    "    \"confidence\": number (0..1), \"sources\": [\"vision\"]\n"
+    "  }...],\n"
+    "  \"quality\": {\n"
+    "    \"not_food_probability\": number 0..1,\n"
+    "    \"unrealistic_scene_probability\": number 0..1,\n"
+    "    \"needs_clarification\": boolean,\n"
+    "    \"clarifications\": [string],\n"
+    "    \"issues\": [string]\n"
+    "  }\n"
+    "}\n"
+    "Правила: Единицы только g/ml/piece. Если масса/объём неясны — оцени разумную порцию и добавь clarifications.\n"
+    "Если на фото нет еды — not_food_probability ≥ 0.8. Если сцена выглядит нереалистичной — unrealistic_scene_probability ≥ 0.7."
 )
 
 
@@ -38,8 +53,33 @@ def infer_foods_from_image_bytes(image_bytes: bytes) -> dict[str, Any]:
     try:
         data = json.loads(txt)
     except Exception:
-        data = {"items": [], "needs_clarification": True, "clarifications": ["Не удалось распознать блюдо"]}
-    return data
+        data = {"items": [], "quality": {"not_food_probability": 0.0, "unrealistic_scene_probability": 0.0, "needs_clarification": True, "clarifications": ["Не удалось распознать блюдо"], "issues": ["parse_error"]}}
+    # Post-process: ensure required fields present and sources
+    items = []
+    for it in data.get("items", []) or []:
+        srcs = it.get("sources") or ["vision"]
+        if not isinstance(srcs, list):
+            srcs = ["vision"]
+        items.append({
+            "name": it.get("name", ""),
+            "unit": it.get("unit", "g"),
+            "amount": float(it.get("amount", 100.0)),
+            "kcal": float(it.get("kcal", 0.0)),
+            "protein_g": float(it.get("protein_g", 0.0)),
+            "fat_g": float(it.get("fat_g", 0.0)),
+            "carb_g": float(it.get("carb_g", 0.0)),
+            "confidence": float(it.get("confidence", 0.0)),
+            "sources": srcs,
+        })
+    quality = data.get("quality") or {}
+    quality = {
+        "not_food_probability": float(quality.get("not_food_probability", 0.0)),
+        "unrealistic_scene_probability": float(quality.get("unrealistic_scene_probability", 0.0)),
+        "needs_clarification": bool(quality.get("needs_clarification", False)),
+        "clarifications": list(quality.get("clarifications", [])),
+        "issues": list(quality.get("issues", [])),
+    }
+    return {"items": items, "quality": quality}
 
 
 def infer_foods_from_images_bytes(images: list[bytes]) -> dict[str, Any]:
@@ -63,7 +103,32 @@ def infer_foods_from_images_bytes(images: list[bytes]) -> dict[str, Any]:
     try:
         data = json.loads(txt)
     except Exception:
-        data = {"items": [], "needs_clarification": True}
-    return data
+        data = {"items": [], "quality": {"not_food_probability": 0.0, "unrealistic_scene_probability": 0.0, "needs_clarification": True, "clarifications": ["Не удалось распознать блюдо"], "issues": ["parse_error"]}}
+    # ensure sources present
+    items = []
+    for it in data.get("items", []) or []:
+        srcs = it.get("sources") or ["vision"]
+        if not isinstance(srcs, list):
+            srcs = ["vision"]
+        items.append({
+            "name": it.get("name", ""),
+            "unit": it.get("unit", "g"),
+            "amount": float(it.get("amount", 100.0)),
+            "kcal": float(it.get("kcal", 0.0)),
+            "protein_g": float(it.get("protein_g", 0.0)),
+            "fat_g": float(it.get("fat_g", 0.0)),
+            "carb_g": float(it.get("carb_g", 0.0)),
+            "confidence": float(it.get("confidence", 0.0)),
+            "sources": srcs,
+        })
+    quality = data.get("quality") or {}
+    quality = {
+        "not_food_probability": float(quality.get("not_food_probability", 0.0)),
+        "unrealistic_scene_probability": float(quality.get("unrealistic_scene_probability", 0.0)),
+        "needs_clarification": bool(quality.get("needs_clarification", False)),
+        "clarifications": list(quality.get("clarifications", [])),
+        "issues": list(quality.get("issues", [])),
+    }
+    return {"items": items, "quality": quality}
 
 

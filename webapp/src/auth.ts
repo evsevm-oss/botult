@@ -4,10 +4,31 @@ let refreshTimer: number | null = null;
 
 const getInitData = (): string | null => {
   try {
-    // Telegram WebApp init data is available inside Telegram client
+    // 1) Try Telegram object
     const tg: any = (window as any).Telegram?.WebApp;
     const initData: string | undefined = tg?.initData;
     if (initData && initData.length > 0) return initData;
+  } catch {}
+  try {
+    // 2) Fallback: query string param provided by Telegram clients
+    const qs = new URLSearchParams(window.location.search);
+    const keys = ["tgWebAppData", "initData", "tgwebappdata"]; // try common variants
+    for (const k of keys) {
+      const v = qs.get(k);
+      if (v && v.length > 0) return v;
+    }
+  } catch {}
+  try {
+    // 3) Fallback: some clients pass initData in the URL hash fragment
+    const h = (window.location.hash || '').replace(/^#/, '');
+    if (h) {
+      const hp = new URLSearchParams(h);
+      const keys = ["tgWebAppData", "initData", "tgwebappdata"]; // same variants
+      for (const k of keys) {
+        const v = hp.get(k);
+        if (v && v.length > 0) return v;
+      }
+    }
   } catch {}
   return null;
 };
@@ -91,9 +112,44 @@ export const apiFetch = async (input: string, init: RequestInit = {}): Promise<R
 
 export const getTelegramId = (): number | null => {
   try {
+    // Debug override via URL param (force_tid)
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const forced = params.get('force_tid');
+      if (forced && /^\d+$/.test(forced)) return parseInt(forced, 10);
+    } catch {}
     const tg: any = (window as any).Telegram?.WebApp;
-    const id = tg?.initDataUnsafe?.user?.id;
-    return typeof id === 'number' ? id : null;
+    const raw = tg?.initDataUnsafe?.user?.id;
+    const id = typeof raw === 'string' ? parseInt(raw, 10) : raw;
+    if (Number.isFinite(id)) return Number(id);
+    // Fallback 1: parse from initData query-string if present (Desktop Telegram иногда не заполняет initDataUnsafe)
+    const init = getInitData();
+    if (init) {
+      try {
+        const params = new URLSearchParams(init);
+        const userStr = params.get('user');
+        if (userStr) {
+          const u = JSON.parse(userStr);
+          const uid = typeof u?.id === 'string' ? parseInt(u.id, 10) : u?.id;
+          if (Number.isFinite(uid)) return Number(uid);
+        }
+      } catch {}
+    }
+    // Fallback: decode from JWT token payload (claim tid)
+    const token = getToken();
+    if (token) {
+      const parts = token.split('.')
+      if (parts.length === 3) {
+        try {
+          const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          const json = JSON.parse(atob(b64));
+          const tid = json?.tid;
+          if (typeof tid === 'number' && Number.isFinite(tid)) return tid;
+          if (typeof tid === 'string' && /^\d+$/.test(tid)) return parseInt(tid, 10);
+        } catch {}
+      }
+    }
+    return null;
   } catch {
     return null;
   }

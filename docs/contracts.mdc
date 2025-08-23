@@ -1,3 +1,20 @@
+## Контракты (фрагменты)
+
+### Фото и мульти‑фото
+
+- POST `/api/photos` params: `telegram_id`, `content_type` body: bytes → `{ image_id }`
+- POST `/api/photo-groups/commit` params: `telegram_id`, `group_id` → `{ handle_image_id, items[], clarifications[], images_count }`
+- POST `/api/photos/{image_id}/save` params: `telegram_id` → `{ meal_id }`
+
+### Нормализация текста/голоса
+
+- POST `/api/normalize` body: `{ text: string, locale: 'ru'|'en', telegram_id?: number }`
+  - response: `{ items: [{ name, unit, amount, kcal, protein_g, fat_g, carb_g, confidence, sources? }], quality?: { needs_clarification, clarifications[], issues[] } }`
+
+### Черновик приёма
+
+- Redis key: `meal:draft:{user_id}` TTL: 600 сек; структура: `{ items[], text, meta{} }`
+
 ## Контракты: DTO/ошибки/события
 
 ### DTO (минимум)
