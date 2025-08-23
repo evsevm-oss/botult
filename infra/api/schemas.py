@@ -119,6 +119,16 @@ class UserSettingsDTO(BaseModel):
     allergies: list[str] | None = None
     diet_mode: Literal["none", "keto", "vegan", "vegetarian", "low_fat", "high_protein"] | None = None
     preferred_units: Literal["metric", "imperial"] | None = None
+    specialist_id: str | None = None
+    timezone: str | None = None
+    locale: Literal["ru", "en"] | None = None
+    notify_enabled: bool | None = None
+    notify_times: list[str] | None = None
+    newsletter_opt_in: bool | None = None
+    favorites_enabled: bool | None = None
+    allow_personal_recipes: bool | None = None
+    export_requested_at: datetime | None = None
+    delete_requested_at: datetime | None = None
 
 
 # BodyFat

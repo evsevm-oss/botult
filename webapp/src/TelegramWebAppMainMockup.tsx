@@ -876,6 +876,15 @@ export default function TelegramWebAppMainMockup() {
   const [wfSeries, setWfSeries] = useState<WFPoint[] | null>(null);
   const [periodFilter, setPeriodFilter] = useState<'week'|'month'|'q'|'year'>('week');
   const [tz, setTz] = useState<string>(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  // Settings state
+  const [settings, setSettings] = useState<{ specialist_id?: string; timezone?: string; locale?: string; preferred_units?: 'metric'|'imperial'; notify_enabled?: boolean; notify_times?: string[]; newsletter_opt_in?: boolean; } | null>(null);
+  const [tmpSpecialist, setTmpSpecialist] = useState<string>('');
+  const [tmpTimezone, setTmpTimezone] = useState<string>(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Madrid');
+  const [tmpLocale, setTmpLocale] = useState<string>('ru');
+  const [tmpUnits, setTmpUnits] = useState<'metric'|'imperial'>('metric');
+  const [tmpNotifyEnabled, setTmpNotifyEnabled] = useState<boolean>(false);
+  const [tmpNotifyTimes, setTmpNotifyTimes] = useState<string[]>([]);
+  const [tmpNewsOptIn, setTmpNewsOptIn] = useState<boolean>(false);
 
   useEffect(() => {
     // Accessibility: set document title
@@ -993,6 +1002,27 @@ export default function TelegramWebAppMainMockup() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // Load settings
+  useEffect(() => {
+    (async () => {
+      try {
+        const tgId = getTelegramId(); if (!tgId) return;
+        const r = await apiFetch(`/api/settings?telegram_id=${tgId}&_=${Date.now()}`);
+        const b = await r.json();
+        if (b?.ok && b?.data) {
+          setSettings(b.data);
+          setTmpSpecialist(String(b.data.specialist_id || ''));
+          if (b.data.timezone) setTmpTimezone(String(b.data.timezone));
+          if (b.data.locale) setTmpLocale(String(b.data.locale));
+          if (b.data.preferred_units) setTmpUnits(b.data.preferred_units);
+          if (typeof b.data.notify_enabled === 'boolean') setTmpNotifyEnabled(!!b.data.notify_enabled);
+          if (Array.isArray(b.data.notify_times)) setTmpNotifyTimes(b.data.notify_times);
+          if (typeof b.data.newsletter_opt_in === 'boolean') setTmpNewsOptIn(!!b.data.newsletter_opt_in);
+        }
+      } catch {}
+    })();
+  }, []);
+
   return (
     <div className="container px-3">
       <RootStyles />
@@ -1079,6 +1109,63 @@ export default function TelegramWebAppMainMockup() {
               />
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Настройки */}
+      <div className="card p-4 mt-3" id="settings">
+        <div className="flex items-center justify-between">
+          <div className="h2">Настройки</div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+          <div className="field">
+            <label className="subtle text-sm">ID специалиста</label>
+            <input className="input" type="text" value={tmpSpecialist} onChange={e=>setTmpSpecialist(e.target.value)} placeholder="например: coach_123" />
+          </div>
+          <div className="field">
+            <label className="subtle text-sm">Часовой пояс</label>
+            <input className="input" type="text" value={tmpTimezone} onChange={e=>setTmpTimezone(e.target.value)} placeholder="Europe/Madrid" />
+          </div>
+          <div className="field">
+            <label className="subtle text-sm">Локаль</label>
+            <select className="input" value={tmpLocale} onChange={e=>setTmpLocale(e.target.value)}>
+              <option value="ru">Русский</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+          <div className="field">
+            <label className="subtle text-sm">Единицы</label>
+            <select className="input" value={tmpUnits} onChange={e=>setTmpUnits(e.target.value as any)}>
+              <option value="metric">Метрические (кг, см, мл)</option>
+              <option value="imperial">Имперские (lb, in, fl oz)</option>
+            </select>
+          </div>
+          <div className="field">
+            <label className="subtle text-sm">Уведомления</label>
+            <div className="flex items-center gap-2 mt-1">
+              <input type="checkbox" checked={tmpNotifyEnabled} onChange={e=>setTmpNotifyEnabled(e.target.checked)} />
+              <span>включить</span>
+            </div>
+          </div>
+          <div className="field">
+            <label className="subtle text-sm">Время уведомлений (чч:мм, через запятую)</label>
+            <input className="input" type="text" value={tmpNotifyTimes.join(', ')} onChange={e=>setTmpNotifyTimes(e.target.value.split(',').map(s=>s.trim()).filter(Boolean))} placeholder="09:00, 13:00, 20:30" />
+          </div>
+          <div className="field">
+            <label className="subtle text-sm">Рассылки / новости</label>
+            <div className="flex items-center gap-2 mt-1">
+              <input type="checkbox" checked={tmpNewsOptIn} onChange={e=>setTmpNewsOptIn(e.target.checked)} />
+              <span>получать полезные материалы</span>
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button className="btn" onClick={async ()=>{
+            try { const tgId = getTelegramId(); if (!tgId) return; 
+              await apiFetch(`/api/settings?telegram_id=${tgId}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ specialist_id: tmpSpecialist || null, timezone: tmpTimezone, locale: tmpLocale, preferred_units: tmpUnits, notify_enabled: tmpNotifyEnabled, notify_times: tmpNotifyTimes, newsletter_opt_in: tmpNewsOptIn }) });
+            } catch {}
+          }}>Сохранить</button>
+          <button className="btn ghost" onClick={()=>{ setTmpSpecialist(String(settings?.specialist_id || '')); }}>Отменить</button>
         </div>
       </div>
 
