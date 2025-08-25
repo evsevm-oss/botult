@@ -92,6 +92,7 @@ async def cmd_budget(message: Message) -> None:
 @basic_router.message(F.photo | F.media_group_id)
 async def on_photo(message: Message) -> None:
     # Принимаем одиночное фото или медиагруппу; на старте сохраняем файл(ы) и ставим в очередь
+    last_image_id: int | None = None
     try:
         from aiogram import Bot
         bot = message.bot
@@ -99,13 +100,12 @@ async def on_photo(message: Message) -> None:
         if message.photo:
             photos = [message.photo[-1]]  # best quality
         # Для медиагруппы aiogram вызывает обработчик для каждого элемента — складываем по одному
-        last_image_id: int | None = None
-        for p in photos:
-            file = await bot.get_file(p.file_id)
-            url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(url)
-                data = resp.content
+        async with httpx.AsyncClient(base_url=settings.api_base_url, timeout=30.0) as client:
+            for p in photos:
+                file = await bot.get_file(p.file_id)
+                url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
+                rget = await client.get(url)
+                data = rget.content
                 r = await client.post(
                     "/api/photos",
                     params={"telegram_id": message.from_user.id, "content_type": "image/jpeg"},
@@ -115,6 +115,7 @@ async def on_photo(message: Message) -> None:
                     last_image_id = (r.json().get("data") or {}).get("image_id")
     except Exception:
         pass
+
     if message.media_group_id:
         # агрегируем группу, попробуем автоматически закоммитить через 2 сек
         gid = message.media_group_id
@@ -148,7 +149,38 @@ async def on_photo(message: Message) -> None:
             # просто уведомим о получении
             await message.answer("Фото получены. Объединяю изображения…")
     else:
-        await message.answer("Фото получено. Поставлено в очередь на распознавание. Сообщу, когда будет готово.")
+        # одиночное фото: запросим превью с БЖУ и быстрыми опциями
+        if last_image_id:
+            async with httpx.AsyncClient(base_url=settings.api_base_url, timeout=20.0) as client:
+                # попытаемся сразу получить последний инференс и показать предпросмотр
+                cr = await client.get(f"/api/photos/{last_image_id}/status")
+                data = cr.json().get("data") if cr.status_code == 200 else None
+                items = (data or {}).get("items") or []
+                clar = (data or {}).get("clarifications") or []
+                if items:
+                    lines = []
+                    for it in items:
+                        name = it.get("name", "?")
+                        amt = int(float(it.get("amount", 0) or 0))
+                        unit = it.get("unit", "g")
+                        kcal = int(float(it.get("kcal", 0) or 0))
+                        p = int(float(it.get("protein_g", 0) or 0))
+                        f = int(float(it.get("fat_g", 0) or 0))
+                        c = int(float(it.get("carb_g", 0) or 0))
+                        lines.append(f"• {name} — {amt}{unit} ≈ {kcal} ккал\n  Протеин: {p} г. | Жиры: {f} г. | Углеводы: {c} г.")
+                    preview = "\n".join(lines)
+                    if clar:
+                        preview += "\n\nУточните:\n" + "\n".join(f"— {c}" for c in clar[:5])
+                    kb = InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="Сохранить", callback_data=f"photo_save:{last_image_id}")],
+                        [InlineKeyboardButton(text="Дополнить", callback_data=f"photo_refine:{last_image_id}")],
+                        [InlineKeyboardButton(text="Отменить", callback_data=f"photo_cancel:{last_image_id}")],
+                    ])
+                    await message.answer(f"Предварительная нормализация (фото):\n{preview}", reply_markup=kb)
+                else:
+                    await message.answer("Фото получено. Поставлено в очередь на распознавание. Сообщу, когда будет готово.")
+        else:
+            await message.answer("Фото получено. Поставлено в очередь на распознавание. Сообщу, когда будет готово.")
 
 
 @basic_router.callback_query(F.data.startswith("photo_save:"))
