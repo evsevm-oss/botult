@@ -1466,9 +1466,25 @@ def create_app() -> FastAPI:
         return APIResponse(ok=True, data={"image_id": image_id, "object_key": res.object_key, "sha256": res.sha256, "status": "queued"})
 
     @app.get("/api/photos/{image_id}/status", response_model=APIResponse)
-    async def photo_status(image_id: int) -> APIResponse:
+    async def photo_status(image_id: int, session: AsyncSession = Depends(get_session)) -> APIResponse:
         status = await get_vision_status(image_id)
-        return APIResponse(ok=True, data=status or {"status": "unknown"})
+        data = status or {"status": "unknown"}
+        try:
+            if data.get("status") == "ready":
+                from infra.db.repositories.vision_inference_repo import VisionInferenceRepo
+                vrepo = VisionInferenceRepo(session)
+                inf = await vrepo.get_latest_by_image(image_id=image_id)
+                if inf and inf.get("response"):
+                    resp = inf["response"]
+                    items = resp.get("items", [])
+                    quality = resp.get("quality") or {}
+                    clar = list(set([*(quality.get("clarifications") or []), *((quality.get("issues") or []))]))
+                    data["items"] = items
+                    if clar:
+                        data["clarifications"] = clar
+        except Exception:
+            pass
+        return APIResponse(ok=True, data=data)
 
     # Aggregate mediagroup images and run multi‑image vision; return preview items
     @app.post("/api/photo-groups/commit", response_model=APIResponse)
