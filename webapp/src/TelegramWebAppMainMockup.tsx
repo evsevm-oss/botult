@@ -12,7 +12,7 @@ import {
   ReferenceLine,
   Legend,
 } from "recharts";
-import { Loader2, Trash2, Pencil, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { Loader2, Trash2, Pencil, ChevronLeft, ChevronRight, Calendar, Home, Book, Settings as SettingsIcon, Heart } from "lucide-react";
 import { apiFetch, getTelegramId } from './auth';
 
 const RootStyles: React.FC = () => (
@@ -24,12 +24,20 @@ const RootStyles: React.FC = () => (
     button,input,select,textarea{font:inherit;color:inherit;background:transparent;border:0;-webkit-appearance:none;appearance:none;padding:0;border-radius:0}
     /* Robust custom radios (work across Telegram WebView versions) */
     .field label{ display:flex; align-items:flex-start; gap:8px; }
-    .field label input[type="radio"]{ position:absolute; opacity:0; width:1px; height:1px; }
-    .field label span{ display:inline-flex; align-items:flex-start; line-height:1.35; }
-    .field label span::before{ content:""; display:inline-block; width:18px; height:18px; flex:0 0 18px; border-radius:9999px; border:2px solid rgba(255,255,255,0.35); margin-right:8px; margin-top:2px; box-sizing:border-box; }
-    .field label input[type="radio"]:checked + span{ color: var(--link); font-weight:600; }
-    .field label input[type="radio"]:checked + span::before{ border-color: var(--link); background: radial-gradient(circle, var(--link) 6px, transparent 7px); }
-    .field label input[type="radio"]:focus-visible + span::before{ outline:2px solid rgba(109,40,217,0.65); outline-offset:2px; }
+    /* Radios (round) */
+    .field input[type="radio"]{ position:absolute; opacity:0; width:1px; height:1px; }
+    .field input[type="radio"] + span{ display:inline-flex; align-items:flex-start; line-height:1.35; }
+    .field input[type="radio"] + span::before{ content:""; display:inline-block; width:18px; height:18px; flex:0 0 18px; border-radius:9999px; border:2px solid rgba(255,255,255,0.35); margin-right:8px; margin-top:2px; box-sizing:border-box; }
+    .field input[type="radio"]:checked + span{ color: var(--link); font-weight:600; }
+    .field input[type="radio"]:checked + span::before{ border-color: var(--link); background: radial-gradient(circle, var(--link) 6px, transparent 7px); }
+    .field input[type="radio"]:focus-visible + span::before{ outline:2px solid rgba(109,40,217,0.65); outline-offset:2px; }
+    /* Custom checkboxes (square) */
+    .field input[type="checkbox"]{ position:absolute; opacity:0; width:1px; height:1px; }
+    .field input[type="checkbox"] + span{ display:inline-flex; align-items:flex-start; line-height:1.35; }
+    .field input[type="checkbox"] + span::before{ content:""; display:inline-block; width:18px; height:18px; flex:0 0 18px; border-radius:4px; border:2px solid rgba(255,255,255,0.35); margin-right:8px; margin-top:2px; box-sizing:border-box; }
+    .field input[type="checkbox"]:checked + span{ color: var(--link); font-weight:600; }
+    .field input[type="checkbox"]:checked + span::before{ border-color: var(--link); background: var(--link); }
+    .field input[type="checkbox"]:focus-visible + span::before{ outline:2px solid rgba(109,40,217,0.65); outline-offset:2px; }
     a{color:inherit;text-decoration:none}
     #root{isolation:isolate}
     :root {
@@ -53,13 +61,17 @@ const RootStyles: React.FC = () => (
     .h1 { font-size: 20px; font-weight: 700; }
     .h2 { font-size: 16px; font-weight: 700; }
     .subtle { color: var(--muted); }
-    .btn { height: 44px; min-width: 44px; padding: 0 16px; border-radius: 12px; font-weight: 600; }
+    .btn { height: 44px; min-width: 44px; padding: 0 16px; border-radius: 12px; font-weight: 600; cursor: pointer; }
     .btn-primary { background: var(--primary); color: var(--primary-text); transition: transform 0.12s ease, box-shadow 0.2s ease, filter 0.2s ease; }
     .btn-primary:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 14px 40px rgba(109,40,217,0.35); }
     .btn-primary:active:not(:disabled) { transform: translateY(0); filter: brightness(0.98); box-shadow: 0 8px 24px rgba(109,40,217,0.28); }
     .btn-primary:focus-visible { outline: 2px solid rgba(109,40,217,0.65); outline-offset: 2px; }
     .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-    .btn-ghost { background: transparent; color: var(--text); border: 1px solid rgba(255,255,255,0.14); }
+    .btn-ghost { background: transparent; color: var(--text); border: 1px solid rgba(255,255,255,0.14); transition: transform 0.12s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease; }
+    .btn-ghost:hover:not(:disabled) { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.24); transform: translateY(-1px); }
+    .btn-ghost:active:not(:disabled) { transform: translateY(0); background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.2); }
+    .btn-ghost:focus-visible { outline: 2px solid rgba(109,40,217,0.65); outline-offset: 2px; }
+    .btn-ghost:disabled { opacity: 0.6; cursor: not-allowed; }
     .tab { display:inline-flex; align-items:center; justify-content:center; min-height: 36px; height: auto; padding: 8px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); white-space: nowrap; line-height: 1; background: rgba(255,255,255,0.06); color: var(--text); }
     .tab-active { background: rgba(109,40,217,0.22); border-color: rgba(109,40,217,0.42); }
     .tab:active{filter:brightness(0.95)}
@@ -175,6 +187,10 @@ const RootStyles: React.FC = () => (
     .grid-cols-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
     @media (min-width: 640px) { .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0,1fr)); } }
     .text-\[12px\] { font-size: 12px; }
+
+    /* dashed links */
+    .link-dashed { color: inherit; text-decoration: none; border-bottom: 1px dashed rgba(255,255,255,0.6); padding-bottom: 1px; cursor: pointer; }
+    .link-dashed:hover { color: var(--link); border-bottom-color: var(--link); }
   `}</style>
 );
 
@@ -208,7 +224,9 @@ const Card: React.FC<{ title?: string; extra?: React.ReactNode; className?: stri
   <section className={`card p-4 shadow-xl ${className || ""}`}> 
     {(title || extra) && (
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2 flex-wrap">
         {title && <div className="h2">{title}</div>}
+        </div>
         {extra}
       </div>
     )}
@@ -341,13 +359,21 @@ const WeightFatWidget: React.FC<{ initial?: WFPoint[] }> = ({ initial }) => {
   const hasData = data.length > 0;
   let leftDomain: [number, number] | undefined;
   let rightDomain: [number, number] | undefined;
+  const fatValues = hasData ? data.map(p => p.fat).filter(v => Number.isFinite(v)) as number[] : [];
+  const hasFat = fatValues.length > 0;
   if (hasData) {
-    const wMin = Math.min(...data.map(p => p.weight));
-    const wMax = Math.max(...data.map(p => p.weight));
-    const fMin = Math.min(...data.map(p => p.fat));
-    const fMax = Math.max(...data.map(p => p.fat));
-    leftDomain = [Math.floor(wMin), Math.ceil(wMax)];
-    rightDomain = [Math.floor(fMin), Math.ceil(fMax)];
+  const wMin = Math.min(...data.map(p => p.weight));
+  const wMax = Math.max(...data.map(p => p.weight));
+    if (Number.isFinite(wMin) && Number.isFinite(wMax)) {
+      leftDomain = [Math.floor(wMin), Math.ceil(wMax)];
+    }
+    if (hasFat) {
+      const fMin = Math.min(...fatValues);
+      const fMax = Math.max(...fatValues);
+      rightDomain = [Math.floor(fMin), Math.ceil(fMax)];
+    } else {
+      rightDomain = undefined;
+    }
   }
 
   return (
@@ -364,18 +390,29 @@ const WeightFatWidget: React.FC<{ initial?: WFPoint[] }> = ({ initial }) => {
     >
       <div style={{ width: '100%', height: 220 }}>
         {hasData ? (
-          <ResponsiveContainer>
-            <LineChart data={data} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
-              <CartesianGrid stroke="var(--chart-grid)" />
-              <XAxis dataKey="d" tick={{ fill: 'var(--muted)' }} interval="preserveStartEnd" />
+        <ResponsiveContainer>
+          <LineChart data={data} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
+            <CartesianGrid stroke="var(--chart-grid)" />
+            <XAxis dataKey="d" tick={{ fill: 'var(--muted)' }} interval="preserveStartEnd" />
               <YAxis yAxisId="left" orientation="left" tick={{ fill: 'var(--muted)' }} domain={leftDomain as [number, number]} />
               <YAxis yAxisId="right" orientation="right" tick={{ fill: 'var(--muted)' }} domain={rightDomain as [number, number]} />
-              <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: 'var(--text)' }} />
-              <Legend wrapperStyle={{ color: 'var(--muted)' }} />
-              <Line yAxisId="left" type="monotone" dataKey="weight" name="Вес (кг)" stroke="#a78bfa" strokeWidth={2.5} dot={false} />
-              <Line yAxisId="right" type="monotone" dataKey="fat" name="Жир (%)" stroke="#38bdf8" strokeWidth={2.5} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+            <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: 'var(--text)' }} />
+            <Legend wrapperStyle={{ color: 'var(--muted)' }} />
+            <Line yAxisId="left" type="monotone" dataKey="weight" name="Вес (кг)" stroke="#a78bfa" strokeWidth={2.5} dot={false} />
+              {hasFat && (
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="fat"
+                  name="Жир (%)"
+                  stroke="#38bdf8"
+                  strokeWidth={2.5}
+                  dot={{ r: 2.5 }}
+                  connectNulls
+                />
+              )}
+          </LineChart>
+        </ResponsiveContainer>
         ) : null}
       </div>
     </Card>
@@ -399,33 +436,34 @@ const CaloriesProteinWidget: React.FC<{ weekly?: { d: string; kcal: number; prot
     return { ak, ap };
   }, [series]);
 
+  const headerExtra = (
+    <div className="flex items-center gap-2 flex-wrap">
+      {CAL_PLAN > 0 && <span className="pill">План калорий {CAL_PLAN}</span>}
+      {PROT_PLAN > 0 && <span className="pill">План протеина {PROT_PLAN}</span>}
+    </div>
+  );
+
   return (
-    <Card title="Потребление калорий и протеина" className="mb-3">
+    <Card title="Потребление калорий и протеина" extra={headerExtra} className="mb-3">
       <div className="chart-wrap" style={{ width: '100%', height: 240 }}>
         {series.length ? (
-          <>
-            <div className="chart-labels">
-              {CAL_PLAN > 0 && <span className="pill">План калорий {CAL_PLAN}</span>}
-              {PROT_PLAN > 0 && <span className="pill">План протеина {PROT_PLAN}</span>}
-            </div>
-            <ResponsiveContainer>
-              <BarChart data={series} margin={{ left: 8, right: 8, top: 24, bottom: 0 }} barCategoryGap="28%">
-                <CartesianGrid stroke="var(--chart-grid)" />
-                <XAxis dataKey="d" tick={{ fill: 'var(--muted)' }} interval="preserveStartEnd" />
-                <YAxis yAxisId="left" tick={{ fill: 'var(--muted)' }} domain={[0, yLeftMax]} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fill: 'var(--muted)' }} domain={[0, yRightMax]} />
-                <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: 'var(--text)' }} />
-                <Legend wrapperStyle={{ color: 'var(--muted)' }} />
-                {CAL_PLAN > 0 && <ReferenceLine yAxisId="left" y={CAL_PLAN} stroke="#a78bfa" strokeDasharray="4 4" />}
-                {PROT_PLAN > 0 && <ReferenceLine yAxisId="right" y={PROT_PLAN} stroke="#38bdf8" strokeDasharray="4 4" />}
-                <Bar yAxisId="left" dataKey="kcal" name="Калории" fill="#8b5cf6" radius={[6,6,0,0]} barSize={18} />
-                <Bar yAxisId="right" dataKey="protein" name="Протеин (г)" fill="#22d3ee" radius={[6,6,0,0]} barSize={18} />
-              </BarChart>
-            </ResponsiveContainer>
-          </>
+        <ResponsiveContainer>
+          <BarChart data={series} margin={{ left: 8, right: 8, top: 8, bottom: 0 }} barCategoryGap="28%">
+            <CartesianGrid stroke="var(--chart-grid)" />
+              <XAxis dataKey="d" tick={{ fill: 'var(--muted)' }} interval="preserveStartEnd" />
+            <YAxis yAxisId="left" tick={{ fill: 'var(--muted)' }} domain={[0, yLeftMax]} />
+            <YAxis yAxisId="right" orientation="right" tick={{ fill: 'var(--muted)' }} domain={[0, yRightMax]} />
+            <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 12, color: 'var(--text)' }} />
+            <Legend wrapperStyle={{ color: 'var(--muted)' }} />
+              {CAL_PLAN > 0 && <ReferenceLine yAxisId="left" y={CAL_PLAN} stroke="#a78bfa" strokeDasharray="4 4" />}
+              {PROT_PLAN > 0 && <ReferenceLine yAxisId="right" y={PROT_PLAN} stroke="#38bdf8" strokeDasharray="4 4" />}
+            <Bar yAxisId="left" dataKey="kcal" name="Калории" fill="#8b5cf6" radius={[6,6,0,0]} barSize={18} />
+            <Bar yAxisId="right" dataKey="protein" name="Протеин (г)" fill="#22d3ee" radius={[6,6,0,0]} barSize={18} />
+          </BarChart>
+        </ResponsiveContainer>
         ) : (
           <ResponsiveContainer>
-            <BarChart data={[]} margin={{ left: 8, right: 8, top: 24, bottom: 0 }}>
+            <BarChart data={[]} margin={{ left: 8, right: 8, top: 8, bottom: 0 }}>
               <CartesianGrid stroke="var(--chart-grid)" />
               <XAxis dataKey="d" tick={{ fill: 'var(--muted)' }} />
               <YAxis yAxisId="left" tick={{ fill: 'var(--muted)' }} />
@@ -435,22 +473,24 @@ const CaloriesProteinWidget: React.FC<{ weekly?: { d: string; kcal: number; prot
         )}
       </div>
       {series.length ? (
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="glass p-3 rounded-lg">
-            <div className="subtle text-sm">Среднедневное за 7 дней (ккал)</div>
-            <div className="mono text-lg">{nf(avg.ak)}</div>
-          </div>
-          <div className="glass p-3 rounded-lg">
-            <div className="subtle text-sm">Среднедневное за 7 дней (протеин, г)</div>
-            <div className="mono text-lg">{nf(avg.ap)}</div>
-          </div>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="glass p-3 rounded-lg">
+          <div className="subtle text-sm">Среднедневное за 7 дней (ккал)</div>
+          <div className="mono text-lg">{nf(avg.ak)}</div>
         </div>
+        <div className="glass p-3 rounded-lg">
+          <div className="subtle text-sm">Среднедневное за 7 дней (протеин, г)</div>
+          <div className="mono text-lg">{nf(avg.ap)}</div>
+        </div>
+      </div>
       ) : null}
     </Card>
   );
 };
 
 interface Food { name: string; kcal: number; protein?: number; weight?: number; mealId?: number; itemId?: number; unit?: string; fat_g?: number; carb_g?: number; }
+type FavItem = { id: string; name: string; unit: string; amount: number; kcal: number; protein_g: number; fat_g: number; carb_g: number };
+type DaySummary = { kcal: number; protein_g: number; fat_g: number; carb_g: number };
 
 const FoodListWidget: React.FC<{
   dateISO: string;
@@ -461,7 +501,20 @@ const FoodListWidget: React.FC<{
   onEdit: (i: number) => void;
   onDelete: (i: number) => void;
   onItemClick: (i: number) => void;
-}> = ({ dateISO, foods, onPrev, onNext, onPickDate, onEdit, onDelete, onItemClick }) => (
+  onAdd: () => void;
+  tz: string;
+  favs: FavItem[];
+  onToggleFavFromFood: (i: number, favId?: string) => void;
+  onOpenFavorites: () => void;
+}> = ({ dateISO, foods, onPrev, onNext, onPickDate, onEdit, onDelete, onItemClick, onAdd, tz, favs, onToggleFavFromFood, onOpenFavorites }) => {
+  const localTotals = {
+    kcal: (foods || []).reduce((s, f) => s + (Number(f.kcal) || 0), 0),
+    protein_g: (foods || []).reduce((s, f) => s + (Number(f.protein) || 0), 0),
+    fat_g: (foods || []).reduce((s, f) => s + (Number(f.fat_g) || 0), 0),
+    carb_g: (foods || []).reduce((s, f) => s + (Number(f.carb_g) || 0), 0),
+  };
+  const totals = localTotals;
+  return (
   <Card
     title="Дневник"
     extra={
@@ -475,22 +528,48 @@ const FoodListWidget: React.FC<{
     }
     className="minh-360"
   >
+    {/* Summary block moved above foods and heading removed */}
+    <div
+      key={`${dateISO}-${(foods||[]).length}-${localTotals.kcal}-${localTotals.protein_g}-${localTotals.fat_g}-${localTotals.carb_g}`}
+      className="glass p-3 rounded-lg mb-3"
+      data-rev={`${dateISO}|${(foods||[]).length}|${localTotals.kcal}|${localTotals.protein_g}|${localTotals.fat_g}|${localTotals.carb_g}`}
+      style={{ transform: 'translateZ(0)', willChange: 'contents' }}
+    >
+      <div className="text-sm mono">Калорий: {nf(totals.kcal)} ккал</div>
+      <div className="text-sm mono">Протеин: {nf(totals.protein_g)} г.</div>
+      <div className="text-sm mono">Жиры: {nf(totals.fat_g)} г.</div>
+      <div className="text-sm mono">Углеводы: {nf(totals.carb_g)} г.</div>
+    </div>
     <div className="space-y-2">
-      {foods.map((f, i) => (
+      {foods.map((f, i) => {
+        const match = (favs||[]).find(x => (x.name||'').trim().toLowerCase() === (f.name||'').trim().toLowerCase() && (x.unit||'g') === (f.unit||'g') && Number(x.amount||0) === Number(f.weight||0) && Number(x.kcal||0) === Number(f.kcal||0));
+        const isFav = !!match;
+        return (
         <div key={i} className="row-grid gap-2 items-center py-2 px-2 rounded-md">
           <button className="text-left truncate pr-3" title={f.name} onClick={() => onItemClick(i)} aria-label={`Изменить ${f.name}`}>
             {f.name}
           </button>
           <div className="mono mr-1">{nf(f.kcal)}{'\u00A0'}ккал</div>
           <div className="flex items-center gap-1">
+            <button className="tab" aria-label={`В избранное ${f.name}`} onClick={() => onToggleFavFromFood(i, match?.id)} title={isFav ? 'Убрать из избранного' : 'В избранное'}>
+              <Heart size={16} color={isFav ? '#ef4444' : 'currentColor'} />
+            </button>
             <button className="tab" aria-label={`Изменить ${f.name}`} onClick={() => onEdit(i)}><Pencil size={16} /></button>
             <button className="tab" aria-label={`Удалить ${f.name}`} onClick={() => onDelete(i)}><Trash2 size={16} /></button>
           </div>
         </div>
-      ))}
+      ); })}
+      <div className="mt-2 flex gap-2 flex-wrap">
+        <button className="btn btn-ghost" onClick={onAdd} aria-label="Добавить еду">+ Добавить еду</button>
+        <button className="btn btn-ghost" onClick={onOpenFavorites} aria-label="Избранные блюда">Избранные блюда</button>
+      </div>
+      <div className="mt-4">
+        <ExportSendLink tz={tz} />
+      </div>
     </div>
   </Card>
 );
+};
 
 const MainButtonDock: React.FC<{ state: 'default'|'disabled'|'loading', label: string, onClick?: () => void }>
   = ({ state, label, onClick }) => (
@@ -621,6 +700,115 @@ function DevTests() {
   );
 }
 
+const SettingsPanel: React.FC<{ saving: boolean; onSave: () => Promise<void> | void; onCancel: () => void; tmpSpecialist: string; setTmpSpecialist: (v: string) => void; tmpTimezone: string; setTmpTimezone: (v: string) => void; tmpUnits: 'metric'|'imperial'; setTmpUnits: (v: 'metric'|'imperial') => void; tmpComm: 'journal_only'|'journal_plus_ai'|'proactive_ai'; setTmpComm: (v: 'journal_only'|'journal_plus_ai'|'proactive_ai') => void; tmpNotifStart: string; setTmpNotifStart: (v: string) => void; tmpNotifEnd: string; setTmpNotifEnd: (v: string) => void; tmpChJournal: boolean; setTmpChJournal: (v: boolean) => void; tmpChAi: boolean; setTmpChAi: (v: boolean) => void; tmpChContent: boolean; setTmpChContent: (v: boolean) => void; }>
+  = ({ saving, onSave, onCancel, tmpSpecialist, setTmpSpecialist, tmpTimezone, setTmpTimezone, tmpUnits, setTmpUnits, tmpComm, setTmpComm, tmpNotifStart, setTmpNotifStart, tmpNotifEnd, setTmpNotifEnd, tmpChJournal, setTmpChJournal, tmpChAi, setTmpChAi, tmpChContent, setTmpChContent }) => (
+  <div className="card p-4" id="settings">
+    <div className="flex items-center justify-between">
+      <div className="h2">Настройки</div>
+    </div>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+      <div className="field">
+        <label className="subtle text-sm">ID специалиста</label>
+        <input className="input" type="text" value={tmpSpecialist} onChange={e=>setTmpSpecialist(e.target.value)} placeholder="например: coach_123" />
+      </div>
+      <div className="field">
+        <label className="subtle text-sm">Часовой пояс</label>
+        <select className="input" value={tmpTimezone} onChange={e=>setTmpTimezone(e.target.value)}>
+          {(() => { const list = (() => { try { return (Intl as any).supportedValuesOf ? (Intl as any).supportedValuesOf('timeZone') : [] as string[]; } catch { return [] as string[]; } })(); const fallback = list && list.length ? list : [
+            'Europe/Madrid','Europe/Paris','Europe/Berlin','Europe/Rome','Europe/London','UTC','America/New_York','America/Los_Angeles','Asia/Dubai','Asia/Tokyo'
+          ]; return (fallback as string[]).map(tz => <option key={tz} value={tz}>{tz}</option>); })()}
+        </select>
+      </div>
+      <div className="field">
+        <label className="subtle text-sm">Период коммуникаций — начало</label>
+        <select className="input" value={tmpNotifStart} onChange={e=>setTmpNotifStart(e.target.value)}>
+          {Array.from({length:9},(_,i)=>4+i).map(h=>{ const hh=String(h).padStart(2,'0'); const v=`${hh}:00`; return <option key={v} value={v}>{v}</option>; })}
+        </select>
+      </div>
+      <div className="field">
+        <label className="subtle text-sm">Период коммуникаций — окончание</label>
+        <select className="input" value={tmpNotifEnd} onChange={e=>setTmpNotifEnd(e.target.value)}>
+          {(() => { const hours = [13,14,15,16,17,18,19,20,21,22,23,0,1,2,3,4]; return hours.map(h=>{ const hh=String(h).padStart(2,'0'); const v=`${hh}:00`; return <option key={v} value={v}>{v}</option>; }); })()}
+        </select>
+      </div>
+    </div>
+    <div className="mt-3">
+      <div className="subtle text-sm mb-1">Типы коммуникаций</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <label className="field" style={{flexDirection:'row',alignItems:'center',gap:8}}>
+          <input type="checkbox" id="cm_journal" checked={tmpChJournal} onChange={e=>setTmpChJournal(e.target.checked)} />
+          <span>Напоминания по Дневнику питания</span>
+        </label>
+        <label className="field" style={{flexDirection:'row',alignItems:'center',gap:8}}>
+          <input type="checkbox" id="cm_ai" checked={tmpChAi} onChange={e=>setTmpChAi(e.target.checked)} />
+          <span>AI-диетолог: рекомендации, коррекция и отчеты</span>
+        </label>
+        <label className="field" style={{flexDirection:'row',alignItems:'center',gap:8}}>
+          <input type="checkbox" id="cm_content" checked={tmpChContent} onChange={e=>setTmpChContent(e.target.checked)} />
+          <span>Дополнительный контент про питание</span>
+        </label>
+      </div>
+    </div>
+    <div className="mt-3 flex gap-2">
+      <button className="btn btn-primary" disabled={saving} aria-busy={saving} onClick={()=>{ onSave(); }}>
+        {saving && <Loader2 className="animate-spin" size={16} />}
+        <span className="ml-1">Сохранить</span>
+      </button>
+      <button className="btn btn-ghost" disabled={saving} onClick={onCancel}>Отмена</button>
+    </div>
+  </div>
+);
+
+const ExportButtons: React.FC<{ tz: string }> = ({ tz }) => {
+  const [copied, setCopied] = useState(false);
+  const hrefCsv = (): string => {
+    const tgId = getTelegramId();
+    if (!tgId) return '#';
+    return `/api/meals/export.csv?telegram_id=${tgId}&tz=${encodeURIComponent(tz)}&_=${Date.now()}`;
+  };
+  const copySheets = async () => {
+    try {
+      const tgId = getTelegramId();
+      if (!tgId) return;
+      const resp = await apiFetch(`/api/meals/export-token?telegram_id=${tgId}`, { method: 'POST' });
+      const body = await resp.json().catch(() => ({} as any));
+      const token = body?.data?.token;
+      if (!token) return;
+      const origin = window.location.origin;
+      const url = `${origin}/api/meals/export.csv/public?token=${encodeURIComponent(token)}&tz=${encodeURIComponent(tz)}`;
+      const formula = `=IMPORTDATA("${url}")`;
+      await navigator.clipboard.writeText(formula);
+      try { (window as any).Telegram?.WebApp?.showPopup?.({ title: 'Скопировано', message: 'Формула для Google Sheets скопирована', buttons: [{ type: 'ok' }] }); } catch {}
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  };
+  return (
+    <>
+      <a className="link-dashed" href={hrefCsv()} rel="noopener noreferrer">Скачать CSV</a>
+      <a className="link-dashed" onClick={(e)=>{ e.preventDefault(); copySheets(); }} role="button" aria-label="Скопировать формулу для Google Таблиц">{copied ? 'Скопировано' : 'Скопировать для Google Таблиц'}</a>
+    </>
+  );
+};
+
+const ExportSendLink: React.FC<{ tz: string }> = ({ tz }) => {
+  const [sending, setSending] = useState(false);
+  const sendCsvToChat = async () => {
+    try {
+      const tgId = getTelegramId();
+      if (!tgId || sending) return;
+      setSending(true);
+      await apiFetch(`/api/meals/export-send?telegram_id=${tgId}&tz=${encodeURIComponent(tz)}`, { method: 'POST' });
+      try { (window as any).Telegram?.WebApp?.showPopup?.({ title: 'Отправлено', message: 'CSV отправлен в чат', buttons: [{ type: 'ok' }] }); } catch {}
+    } catch {} finally {
+      setSending(false);
+    }
+  };
+  return (
+    <a className="link-dashed" onClick={(e)=>{ e.preventDefault(); sendCsvToChat(); }} role="button" aria-label="Прислать CSV в чат">{sending ? 'Отправляется…' : 'Прислать CSV'}</a>
+  );
+};
+
 export default function TelegramWebAppMainMockup() {
   const [mbState, setMbState] = useState<'default'|'disabled'|'loading'>('default');
   const [offline, setOffline] = useState(false);
@@ -670,7 +858,7 @@ export default function TelegramWebAppMainMockup() {
   const [goalMode, setGoalMode] = useState<'loss'|'maint'|'gain'|'nocw'>(() => inferGoalMode(goalTitle, goalNote));
 
   // Модалки
-  const [modal, setModal] = useState<{ type: null | 'goal' | 'cal' | 'prot' | 'weight' | 'fat' | 'food-edit' | 'food-del' | 'diary-date' }>({ type: null });
+  const [modal, setModal] = useState<{ type: null | 'goal' | 'cal' | 'prot' | 'weight' | 'fat' | 'food-edit' | 'food-del' | 'diary-date' | 'favorites' }>({ type: null });
   const close = () => setModal({ type: null });
 
   // Поля модалок
@@ -721,13 +909,13 @@ export default function TelegramWebAppMainMockup() {
       localStorage.removeItem('profile.protPlan');
     } catch {}
     // Trigger Telegram notification with strategy video (best-effort, без всплывающих предупреждений)
-    try {
-      const tgId = getTelegramId();
+      try {
+        const tgId = getTelegramId();
       if (tgId) {
         const mode = goalMode === 'loss' ? 'loss' : (goalMode === 'maint' ? 'maint' : (goalMode === 'gain' ? 'gain' : 'nocw'));
         apiFetch(`/api/goal-notify?telegram_id=${tgId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }) }).catch(()=>{});
       }
-    } catch {}
+      } catch {}
     close();
   };
 
@@ -744,14 +932,14 @@ export default function TelegramWebAppMainMockup() {
       const d = todayISO();
       setWeightsByDate(m => { const nm = { ...m, [d]: v }; try { localStorage.setItem('profile.weightsByDate', JSON.stringify(nm)); } catch {} return nm; });
       // send to server
-      const tgId = getTelegramId();
+        const tgId = getTelegramId();
       if (tgId) {
         try {
           await apiFetch(`/api/weights?telegram_id=${tgId}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ date: d, weight_kg: v })
           });
-        } catch {}
+      } catch {}
       }
     }
     close();
@@ -789,11 +977,11 @@ export default function TelegramWebAppMainMockup() {
       // send to server
       const tgId = getTelegramId();
       if (tgId) {
-        const today = todayISO();
+      const today = todayISO();
         try {
           await apiFetch(`/api/bodyfat?telegram_id=${tgId}`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ date: today, percent: val })
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: today, percent: val })
           });
         } catch {}
       }
@@ -805,10 +993,28 @@ export default function TelegramWebAppMainMockup() {
   // Дневник (стабильная версия: один список, дата для навигации)
   const [diaryDateISO, setDiaryDateISO] = useState<string>(todayISO());
   const [foodList, setFoodList] = useState<Food[]>([]);
+  const [favorites, setFavorites] = useState<FavItem[]>([]);
   const [kcalTodayTotal, setKcalTodayTotal] = useState<number>(0);
+  const [daySummary, setDaySummary] = useState<DaySummary | null>(null);
+  const [daySummaryDate, setDaySummaryDate] = useState<string>('');
   const diaryRef = useRef<HTMLDivElement | null>(null);
   const openDiaryDate = () => { setTmpStartISO(diaryDateISO); setModal({ type: 'diary-date' }); };
   const saveDiaryDate = () => { if (tmpStartISO) setDiaryDateISO(tmpStartISO); close(); };
+  // Immediately clear foods when date changes to prevent showing previous totals
+  useEffect(() => { setFoodList([]); }, [diaryDateISO]);
+  // Track selected date and reset summary on change to avoid stale values
+  const selectedDateRef = useRef<string>(diaryDateISO);
+  useEffect(() => { selectedDateRef.current = diaryDateISO; setDaySummary(null); setDaySummaryDate(''); }, [diaryDateISO]);
+
+  // Favorites API
+  const loadFavorites = useCallback(async () => {
+    try { const tgId = getTelegramId(); if (!tgId) return; const r = await apiFetch(`/api/favorites?telegram_id=${tgId}&_=${Date.now()}`); const b = await r.json(); if (b?.ok) setFavorites(b.data.items || []); } catch {}
+  }, []);
+  useEffect(() => { loadFavorites(); }, [loadFavorites]);
+  const addToFavorites = useCallback(async (src: Food) => {
+    try { const tgId = getTelegramId(); if (!tgId) return; const payload = { name: src.name, unit: src.unit || 'g', amount: Number(src.weight||0), kcal: Number(src.kcal||0), protein_g: Number(src.protein||0), fat_g: Number(src.fat_g||0), carb_g: Number(src.carb_g||0) }; const r = await apiFetch(`/api/favorites?telegram_id=${tgId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const b = await r.json().catch(()=>({})); if (b?.ok) await loadFavorites(); } catch {}
+  }, [loadFavorites]);
+  const deleteFavorite = useCallback(async (favId: string) => { try { const tgId = getTelegramId(); if (!tgId) return; const r = await apiFetch(`/api/favorites/${encodeURIComponent(favId)}?telegram_id=${tgId}`, { method: 'DELETE' }); const b = await r.json().catch(()=>({})); if (b?.ok) await loadFavorites(); } catch {} }, [loadFavorites]);
 
   // CRUD блюд
   const [editIndex, setEditIndex] = useState<number>(-1);
@@ -819,12 +1025,32 @@ export default function TelegramWebAppMainMockup() {
   const [tmpFoodFat, setTmpFoodFat] = useState<string>('0');
   const [tmpFoodCarb, setTmpFoodCarb] = useState<string>('0');
   const openFoodEdit = (i: number) => { const f = foodList[i]; if (!f) return; setEditIndex(i); setTmpFoodName(f.name); setTmpFoodWeight(String(f.weight ?? 0)); setTmpFoodProtein(String(f.protein ?? 0)); setTmpFoodKcal(String(f.kcal)); setTmpFoodFat(String(f.fat_g ?? 0)); setTmpFoodCarb(String(f.carb_g ?? 0)); setModal({ type: 'food-edit' }); };
+  // Handle creating a new food (no existing mealId)
+  const openFoodAdd = () => { setEditIndex(-1); setTmpFoodName(''); setTmpFoodWeight('0'); setTmpFoodProtein('0'); setTmpFoodKcal('0'); setTmpFoodFat('0'); setTmpFoodCarb('0'); setModal({ type: 'food-edit' }); };
   const saveFoodEdit = async () => {
-    if (editIndex < 0) return close();
-    const edited = foodList[editIndex];
-    if (!edited?.mealId) { close(); return; }
     const tgId = getTelegramId();
     if (!tgId) { close(); return; }
+    // Add new item
+    if (editIndex < 0) {
+      const item = {
+        name: (tmpFoodName || '').trim() || 'Продукт',
+        unit: 'g',
+        amount: Number(tmpFoodWeight) || 0,
+        kcal: Number(tmpFoodKcal) || 0,
+        protein_g: Number(tmpFoodProtein) || 0,
+        fat_g: Number(tmpFoodFat) || 0,
+        carb_g: Number(tmpFoodCarb) || 0,
+      };
+      const at = new Date();
+      try {
+        await apiFetch(`/api/meals?telegram_id=${tgId}&tz=${encodeURIComponent(tz)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: new Date(at.getTime()-at.getTimezoneOffset()*60000).toISOString(), type: null, items: [item], notes: 'webapp:add', status: 'confirmed', source_chat_id: null, source_message_id: null, source_update_id: null }) });
+      } catch {}
+      close();
+      await fetchAll();
+      return;
+    }
+    const edited = foodList[editIndex];
+    if (!edited?.mealId) { close(); return; }
     const updatedItem: Food = {
       ...edited,
       name: tmpFoodName.trim() || edited.name,
@@ -877,14 +1103,21 @@ export default function TelegramWebAppMainMockup() {
   const [periodFilter, setPeriodFilter] = useState<'week'|'month'|'q'|'year'>('week');
   const [tz, setTz] = useState<string>(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
   // Settings state
-  const [settings, setSettings] = useState<{ specialist_id?: string; timezone?: string; locale?: string; preferred_units?: 'metric'|'imperial'; notify_enabled?: boolean; notify_times?: string[]; newsletter_opt_in?: boolean; } | null>(null);
+  const [settings, setSettings] = useState<{ specialist_id?: string; timezone?: string; preferred_units?: 'metric'|'imperial'; communication_mode?: 'journal_only'|'journal_plus_ai'|'proactive_ai'; } | null>(null);
   const [tmpSpecialist, setTmpSpecialist] = useState<string>('');
-  const [tmpTimezone, setTmpTimezone] = useState<string>(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Madrid');
-  const [tmpLocale, setTmpLocale] = useState<string>('ru');
+  const [tmpTimezone, setTmpTimezone] = useState<string>('Europe/Madrid');
   const [tmpUnits, setTmpUnits] = useState<'metric'|'imperial'>('metric');
-  const [tmpNotifyEnabled, setTmpNotifyEnabled] = useState<boolean>(false);
-  const [tmpNotifyTimes, setTmpNotifyTimes] = useState<string[]>([]);
+  const [tmpComm, setTmpComm] = useState<'journal_only'|'journal_plus_ai'|'proactive_ai'>('proactive_ai');
+  // Missing states for communication period and channels (prevent render crash)
+  const [tmpNotifStart, setTmpNotifStart] = useState<string>('09:00');
+  const [tmpNotifEnd, setTmpNotifEnd] = useState<string>('21:00');
+  const [tmpChJournal, setTmpChJournal] = useState<boolean>(true);
+  const [tmpChAi, setTmpChAi] = useState<boolean>(true);
+  const [tmpChContent, setTmpChContent] = useState<boolean>(true);
   const [tmpNewsOptIn, setTmpNewsOptIn] = useState<boolean>(false);
+  const [savingSettings, setSavingSettings] = useState<boolean>(false);
+  const [isNarrow, setIsNarrow] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'home'|'diary'|'settings'>('home');
 
   useEffect(() => {
     // Accessibility: set document title
@@ -897,6 +1130,22 @@ export default function TelegramWebAppMainMockup() {
     } catch {}
   }, []);
 
+  // Narrow layout detector (sync with .grid-desktop breakpoint 960px)
+  useEffect(() => {
+    try {
+      const mq = window.matchMedia('(max-width: 959px)');
+      const update = (m: MediaQueryList | MediaQueryListEvent) => setIsNarrow('matches' in m ? m.matches : (m as MediaQueryList).matches);
+      update(mq);
+      const handler = (e: MediaQueryListEvent) => setIsNarrow(e.matches);
+      if ((mq as any).addEventListener) (mq as any).addEventListener('change', handler);
+      else (mq as any).addListener(handler);
+      return () => {
+        if ((mq as any).removeEventListener) (mq as any).removeEventListener('change', handler);
+        else (mq as any).removeListener(handler);
+      };
+    } catch {}
+  }, []);
+
   // Debug overlay (temporary) — shows tgId and basic fetch statuses
   const [dbg, setDbg] = useState<{ tgId: number | null; weekly: string; weights: string; bodyfat: string; meals: string } | null>(null);
 
@@ -906,6 +1155,7 @@ export default function TelegramWebAppMainMockup() {
         const tgId = getTelegramId();
         if (!tgId) { setLoading(false); return; }
         let anyOk = false;
+        const reqDate = diaryDateISO;
         // Weekly summary: use /api/summary/weekly to derive bars; optionally fetch /api/weights for WF graph later
         const today = new Date();
         const daySpan = periodFilter==='week' ? 6 : (periodFilter==='month' ? 29 : (periodFilter==='q' ? 89 : 364));
@@ -930,20 +1180,36 @@ export default function TelegramWebAppMainMockup() {
           wf = items.map((it) => ({ x: it.date, d: it.date.slice(5), weight: Number(it.weight_kg||0), fat: Number.NaN }));
           anyOk = true;
         }
-        // Bodyfat (optional)
+        // Bodyfat (optional) — merge by UNION of dates from weights and bodyfat
         try {
           const bfRes = await apiFetch(`/api/bodyfat?telegram_id=${tgId}&start=${start}&_=${Date.now()}`);
           const bf = await bfRes.json();
-          if (bf?.ok && Array.isArray(bf?.data?.items) && wf.length) {
-            const map: Record<string, number> = {};
-            (bf.data.items as { date: string; percent: number }[]).forEach(it => { map[it.date] = Number(it.percent||0) });
-            wf = wf.map(p => ({ ...p, fat: (map[p.x] != null ? Number(map[p.x]) : Number.NaN) as unknown as number }));
+            if (bf?.ok && Array.isArray(bf?.data?.items)) {
+            const fatMap: Record<string, number> = {};
+            (bf.data.items as { date: string; percent: number }[]).forEach(it => { fatMap[it.date] = Number(it.percent||0) });
+            const weightMap: Record<string, number> = {};
+            wf.forEach(p => { weightMap[p.x] = Number(p.weight); });
+            const allDates = new Set<string>([...Object.keys(weightMap), ...Object.keys(fatMap)]);
+            if (allDates.size > 0) {
+              const merged: WFPoint[] = Array.from(allDates)
+                .sort()
+                .map(date => ({
+                  x: date,
+                  d: date.slice(5),
+                  weight: Number.isFinite(weightMap[date]) ? Number(weightMap[date]) : Number.NaN,
+                  fat: (fatMap[date] != null ? Number(fatMap[date]) : Number.NaN) as unknown as number,
+                }));
+              wf = merged;
+            } else {
+              // no fat data: keep weights-only series
+              wf = wf.map(p => ({ ...p, fat: Number.NaN as unknown as number }));
+            }
             anyOk = true;
-          }
-        } catch {}
-        setWfSeries(wf);
+            }
+          } catch {}
+          setWfSeries(wf);
         // Meals for selected date
-        const r2 = await apiFetch(`/api/meals?telegram_id=${tgId}&date=${diaryDateISO}&tz=${encodeURIComponent(tz)}&_=${Date.now()}`);
+        const r2 = await apiFetch(`/api/meals?telegram_id=${tgId}&date=${reqDate}&tz=${encodeURIComponent(tz)}&_=${Date.now()}`);
         const b2 = await r2.json();
         if (b2?.ok && Array.isArray(b2?.data?.items)) {
           const meals = b2.data.items as any[];
@@ -952,6 +1218,14 @@ export default function TelegramWebAppMainMockup() {
             (m.items || []).forEach((it: any) => list.push({ name: it.name, kcal: Number(it.kcal||0), protein: Number(it.protein_g||0), weight: Number(it.amount||0), mealId: m.id, itemId: it.id, unit: it.unit || 'g', fat_g: Number(it.fat_g||0), carb_g: Number(it.carb_g||0) }));
           });
           setFoodList(list);
+          // локальная сводка на случай, если серверная недоступна
+          const local = {
+            kcal: list.reduce((s, x) => s + (Number(x.kcal)||0), 0),
+            protein_g: list.reduce((s, x) => s + (Number(x.protein)||0), 0),
+            fat_g: list.reduce((s, x) => s + (Number(x.fat_g)||0), 0),
+            carb_g: list.reduce((s, x) => s + (Number(x.carb_g)||0), 0),
+          } as DaySummary;
+          if (selectedDateRef.current === reqDate) { setDaySummary(local); setDaySummaryDate(reqDate); }
           anyOk = true;
           // fallback для графика потребления, если weekly пуст
           const dayK = list.reduce((s, x) => s + (Number(x.kcal)||0), 0);
@@ -962,26 +1236,38 @@ export default function TelegramWebAppMainMockup() {
           // Если weekly уже есть, но нет колонки за сегодня — добавим её из дневника
           if (hasWeekly) {
             const hasToday = weeklySer.some(x => x.d === todayKey);
-            if (!hasToday && diaryDateISO === todayIso && (dayK > 0 || dayP > 0)) {
+            if (!hasToday && reqDate === todayIso && (dayK > 0 || dayP > 0)) {
               weeklySer = [...weeklySer, { d: todayKey, kcal: dayK, protein: dayP }]
                 .sort((a,b) => a.d.localeCompare(b.d));
             }
           } else if (dayK > 0 || dayP > 0) {
-            weeklySer = [{ d: diaryDateISO.slice(5), kcal: dayK, protein: dayP }];
+            weeklySer = [{ d: reqDate.slice(5), kcal: dayK, protein: dayP }];
           }
         } else {
           setFoodList([]);
+          if (selectedDateRef.current === reqDate) { setDaySummary({ kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0 }); setDaySummaryDate(reqDate); }
         }
         setWeeklySeries(weeklySer);
-        // Today kcal for bottom button (from server summary, fallback to local if current day is open)
+        // Day summary (для карточки «Дневник») и Today kcal для нижней кнопки
         try {
-          const todayIso = todayISO();
-          const rs = await apiFetch(`/api/summary/daily?telegram_id=${tgId}&date=${todayIso}&tz=${encodeURIComponent(tz)}&no_cache=1&_=${Date.now()}`);
+          const rs = await apiFetch(`/api/summary/daily?telegram_id=${tgId}&date=${reqDate}&tz=${encodeURIComponent(tz)}&no_cache=1&_=${Date.now()}`);
           const bs = await rs.json();
+          const todayIso = todayISO();
           if (bs?.ok && bs?.data?.consumed) {
-            setKcalTodayTotal(Number(bs.data.consumed.kcal || 0));
+            const sum = bs.data.consumed;
+            if (reqDate === todayIso) {
+              if (selectedDateRef.current === reqDate) { setDaySummary({ kcal: Number(sum.kcal||0), protein_g: Number(sum.protein_g||0), fat_g: Number(sum.fat_g||0), carb_g: Number(sum.carb_g||0) }); setDaySummaryDate(reqDate); }
+              setKcalTodayTotal(Number(sum.kcal || 0));
+            } else {
+              const respDate = (bs?.data?.date || bs?.data?.for_date || bs?.data?.day || bs?.data?.date_iso) as string | undefined;
+              if (respDate && respDate === reqDate && selectedDateRef.current === reqDate) {
+                setDaySummary({ kcal: Number(sum.kcal||0), protein_g: Number(sum.protein_g||0), fat_g: Number(sum.fat_g||0), carb_g: Number(sum.carb_g||0) });
+                setDaySummaryDate(reqDate);
+              }
+              // иначе оставляем локальные суммы
+            }
             anyOk = true;
-          } else if (diaryDateISO === todayIso) {
+          } else if (reqDate === todayIso) {
             setKcalTodayTotal((foodList || []).reduce((s, f) => s + (Number(f.kcal) || 0), 0));
           }
         } catch {
@@ -1012,12 +1298,17 @@ export default function TelegramWebAppMainMockup() {
         if (b?.ok && b?.data) {
           setSettings(b.data);
           setTmpSpecialist(String(b.data.specialist_id || ''));
-          if (b.data.timezone) setTmpTimezone(String(b.data.timezone));
-          if (b.data.locale) setTmpLocale(String(b.data.locale));
+          if (b.data.timezone) { setTmpTimezone(String(b.data.timezone)); setTz(String(b.data.timezone)); }
           if (b.data.preferred_units) setTmpUnits(b.data.preferred_units);
-          if (typeof b.data.notify_enabled === 'boolean') setTmpNotifyEnabled(!!b.data.notify_enabled);
-          if (Array.isArray(b.data.notify_times)) setTmpNotifyTimes(b.data.notify_times);
-          if (typeof b.data.newsletter_opt_in === 'boolean') setTmpNewsOptIn(!!b.data.newsletter_opt_in);
+          if (b.data.communication_mode) setTmpComm(b.data.communication_mode);
+          // hydrate local state for time and channels
+          const nt = (b.data.notify_times || []) as string[];
+          setTmpNotifStart(nt?.[0] || '09:00');
+          setTmpNotifEnd(nt?.[1] || '21:00');
+          const cc = (b.data.comm_channels || {}) as any;
+          setTmpChJournal(cc.journal_reminders !== false);
+          setTmpChAi(cc.ai_diet !== false);
+          setTmpChContent(cc.extra_content !== false);
         }
       } catch {}
     })();
@@ -1033,6 +1324,7 @@ export default function TelegramWebAppMainMockup() {
           <div className="h2 mb-1">Debug</div>
           <div className="mono text-sm">tgId: {String(dbg.tgId)}</div>
           <div className="mono text-sm">weekly: {dbg.weekly} • weights: {dbg.weights} • bodyfat: {dbg.bodyfat} • meals: {dbg.meals}</div>
+          <div className="mono text-sm">ui: tab={activeTab} • narrow={String(isNarrow)}</div>
         </div>
       ); } } catch {} return null; })()}
 
@@ -1043,7 +1335,153 @@ export default function TelegramWebAppMainMockup() {
         </div>
       )}
 
-      {/* Контентная сетка */}
+      {isNarrow && (
+        <div className="card p-2 mb-3" role="tablist" aria-label="Навигация">
+          <div className="tabs w-full">
+            <button className={`tab flex-1 ${activeTab==='home' ? 'tab-active' : ''}`} aria-selected={activeTab==='home'} onClick={()=>setActiveTab('home')}>
+              <Home size={16} className="mr-1" /> Главная
+            </button>
+            <button className={`tab flex-1 ${activeTab==='diary' ? 'tab-active' : ''}`} aria-selected={activeTab==='diary'} onClick={()=>setActiveTab('diary')}>
+              <Book size={16} className="mr-1" /> Дневник
+            </button>
+            <button className={`tab flex-1 ${activeTab==='settings' ? 'tab-active' : ''}`} aria-selected={activeTab==='settings'} onClick={()=>setActiveTab('settings')}>
+              <SettingsIcon size={16} className="mr-1" /> Настройки
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isNarrow ? (
+        <>
+          {activeTab === 'home' && (
+            <div className="space-y-3">
+              {loading ? (
+                <div className="card p-4">
+                  <div className="skeleton h-5 w-48 mb-4 rounded"></div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {Array.from({ length: 5 }).map((_,i) => (
+                      <div key={i} className="skeleton h-6 rounded"></div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <MainInfo
+                  values={values}
+                  onEditGoal={openGoal}
+                  onEditCalories={openCal}
+                  onEditProtein={openProt}
+                  onAddWeightToday={openWeight}
+                  onAddFatToday={openFat}
+                />
+              )}
+
+              {loading ? (
+                <div className="card p-4">
+                  <div className="skeleton h-5 w-64 mb-3 rounded"></div>
+                  <div className="skeleton h-[220px] rounded"></div>
+                </div>
+              ) : <WeightFatWidget initial={wfSeries || undefined} />}
+
+              {loading ? (
+                <div className="card p-4">
+                  <div className="skeleton h-5 w-72 mb-3 rounded"></div>
+                  <div className="skeleton h-[240px] rounded"></div>
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <div className="skeleton h-16 rounded"></div>
+                    <div className="skeleton h-16 rounded"></div>
+                  </div>
+                </div>
+              ) : <CaloriesProteinWidget weekly={weeklySeries || undefined} calPlan={Number.isFinite(calPlan)?calPlan:undefined} protPlan={Number.isFinite(protPlan)?protPlan:undefined} />}
+            </div>
+          )}
+
+          {activeTab === 'diary' && (
+            <div className="space-y-3">
+              {loading ? (
+                <div className="card p-4 min-h-[360px]">
+                  <div className="skeleton h-5 w-80 mb-3 rounded"></div>
+                  {Array.from({ length: 10 }).map((_, i) => (
+                    <div key={i} className="skeleton h-10 rounded mb-2"></div>
+                  ))}
+                </div>
+              ) : (
+                <div ref={diaryRef}>
+                  <FoodListWidget
+                    key={diaryDateISO}
+                    dateISO={diaryDateISO}
+                    foods={foodList}
+                    onPrev={() => setDiaryDateISO(d => shiftDateISO(d, -1))}
+                    onNext={() => setDiaryDateISO(d => shiftDateISO(d, +1))}
+                    onPickDate={openDiaryDate}
+                    onEdit={openFoodEdit}
+                    onDelete={openFoodDelete}
+                    onItemClick={openFoodEdit}
+                    onAdd={openFoodAdd}
+                    tz={tz}
+                    favs={favorites}
+                    onToggleFavFromFood={async (i, favId)=>{ const f = foodList[i]; if (!f) return; if (favId) { await deleteFavorite(favId); } else { await addToFavorites(f); } }}
+                    onOpenFavorites={()=> setModal({ type: 'favorites' })}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'settings' && (
+            <SettingsPanel
+              saving={savingSettings}
+              onSave={async ()=>{
+                try {
+                  setSavingSettings(true);
+                  const tgId = getTelegramId(); if (!tgId) return; 
+                  const comm_channels = { journal_reminders: !!tmpChJournal, ai_diet: !!tmpChAi, extra_content: !!tmpChContent };
+                  const newSettings = { specialist_id: tmpSpecialist || null, timezone: tmpTimezone, preferred_units: tmpUnits, communication_mode: tmpComm, notify_times: [tmpNotifStart, tmpNotifEnd], comm_channels } as const;
+                  const resp = await apiFetch(`/api/settings?telegram_id=${tgId}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(newSettings) });
+                  if (resp.ok) {
+                    setSettings({ ...settings, ...newSettings } as any);
+                    setTz(tmpTimezone);
+                  }
+                } catch {} finally {
+                  setSavingSettings(false);
+                }
+              }}
+              onCancel={()=>{
+                const s = settings || {} as any;
+                setTmpSpecialist(String(s.specialist_id || ''));
+                setTmpComm((s.communication_mode as any) || 'proactive_ai');
+                setTmpTimezone(String(s.timezone || 'Europe/Madrid'));
+                setTmpUnits((s.preferred_units as any) || 'metric');
+                setTz(String(s.timezone || 'Europe/Madrid'));
+                const nt = (s?.notify_times || []) as string[];
+                setTmpNotifStart(nt?.[0] || '09:00');
+                setTmpNotifEnd(nt?.[1] || '21:00');
+                const cc = (s?.comm_channels || {}) as any;
+                setTmpChJournal(cc.journal_reminders !== false);
+                setTmpChAi(cc.ai_diet !== false);
+                setTmpChContent(cc.extra_content !== false);
+              }}
+              tmpSpecialist={tmpSpecialist}
+              setTmpSpecialist={setTmpSpecialist}
+              tmpTimezone={tmpTimezone}
+              setTmpTimezone={setTmpTimezone}
+              tmpUnits={tmpUnits}
+              setTmpUnits={setTmpUnits}
+              tmpComm={tmpComm}
+              setTmpComm={setTmpComm}
+              tmpNotifStart={tmpNotifStart}
+              setTmpNotifStart={setTmpNotifStart}
+              tmpNotifEnd={tmpNotifEnd}
+              setTmpNotifEnd={setTmpNotifEnd}
+              tmpChJournal={tmpChJournal}
+              setTmpChJournal={setTmpChJournal}
+              tmpChAi={tmpChAi}
+              setTmpChAi={setTmpChAi}
+              tmpChContent={tmpChContent}
+              setTmpChContent={setTmpChContent}
+            />
+          )}
+        </>
+      ) : (
       <div className="grid-desktop gap-3">
         {/* Левая колонка */}
         <div className="space-y-3">
@@ -1083,7 +1521,7 @@ export default function TelegramWebAppMainMockup() {
                 <div className="skeleton h-16 rounded"></div>
               </div>
             </div>
-          ) : <CaloriesProteinWidget weekly={weeklySeries || undefined} calPlan={Number.isFinite(calPlan)?calPlan:undefined} protPlan={Number.isFinite(protPlan)?protPlan:undefined} />}
+            ) : <CaloriesProteinWidget weekly={weeklySeries || undefined} calPlan={Number.isFinite(calPlan)?calPlan:undefined} protPlan={Number.isFinite(protPlan)?protPlan:undefined} />}
         </div>
 
         {/* Правая колонка */}
@@ -1098,6 +1536,7 @@ export default function TelegramWebAppMainMockup() {
           ) : (
             <div ref={diaryRef}>
               <FoodListWidget
+                  key={diaryDateISO}
                 dateISO={diaryDateISO}
                 foods={foodList}
                 onPrev={() => setDiaryDateISO(d => shiftDateISO(d, -1))}
@@ -1106,74 +1545,77 @@ export default function TelegramWebAppMainMockup() {
                 onEdit={openFoodEdit}
                 onDelete={openFoodDelete}
                 onItemClick={openFoodEdit}
+                  onAdd={openFoodAdd}
+                  tz={tz}
+                  favs={favorites}
+                  onToggleFavFromFood={async (i, favId)=>{ const f = foodList[i]; if (!f) return; if (favId) { await deleteFavorite(favId); } else { await addToFavorites(f); } }}
+                  onOpenFavorites={()=> setModal({ type: 'favorites' })}
               />
             </div>
           )}
-        </div>
-      </div>
 
-      {/* Настройки */}
-      <div className="card p-4 mt-3" id="settings">
-        <div className="flex items-center justify-between">
-          <div className="h2">Настройки</div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-          <div className="field">
-            <label className="subtle text-sm">ID специалиста</label>
-            <input className="input" type="text" value={tmpSpecialist} onChange={e=>setTmpSpecialist(e.target.value)} placeholder="например: coach_123" />
-          </div>
-          <div className="field">
-            <label className="subtle text-sm">Часовой пояс</label>
-            <input className="input" type="text" value={tmpTimezone} onChange={e=>setTmpTimezone(e.target.value)} placeholder="Europe/Madrid" />
-          </div>
-          <div className="field">
-            <label className="subtle text-sm">Локаль</label>
-            <select className="input" value={tmpLocale} onChange={e=>setTmpLocale(e.target.value)}>
-              <option value="ru">Русский</option>
-              <option value="en">English</option>
-            </select>
-          </div>
-          <div className="field">
-            <label className="subtle text-sm">Единицы</label>
-            <select className="input" value={tmpUnits} onChange={e=>setTmpUnits(e.target.value as any)}>
-              <option value="metric">Метрические (кг, см, мл)</option>
-              <option value="imperial">Имперские (lb, in, fl oz)</option>
-            </select>
-          </div>
-          <div className="field">
-            <label className="subtle text-sm">Уведомления</label>
-            <div className="flex items-center gap-2 mt-1">
-              <input type="checkbox" checked={tmpNotifyEnabled} onChange={e=>setTmpNotifyEnabled(e.target.checked)} />
-              <span>включить</span>
-            </div>
-          </div>
-          <div className="field">
-            <label className="subtle text-sm">Время уведомлений (чч:мм, через запятую)</label>
-            <input className="input" type="text" value={tmpNotifyTimes.join(', ')} onChange={e=>setTmpNotifyTimes(e.target.value.split(',').map(s=>s.trim()).filter(Boolean))} placeholder="09:00, 13:00, 20:30" />
-          </div>
-          <div className="field">
-            <label className="subtle text-sm">Рассылки / новости</label>
-            <div className="flex items-center gap-2 mt-1">
-              <input type="checkbox" checked={tmpNewsOptIn} onChange={e=>setTmpNewsOptIn(e.target.checked)} />
-              <span>получать полезные материалы</span>
-            </div>
-          </div>
-        </div>
-        <div className="mt-3 flex gap-2">
-          <button className="btn" onClick={async ()=>{
-            try { const tgId = getTelegramId(); if (!tgId) return; 
-              await apiFetch(`/api/settings?telegram_id=${tgId}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ specialist_id: tmpSpecialist || null, timezone: tmpTimezone, locale: tmpLocale, preferred_units: tmpUnits, notify_enabled: tmpNotifyEnabled, notify_times: tmpNotifyTimes, newsletter_opt_in: tmpNewsOptIn }) });
-            } catch {}
-          }}>Сохранить</button>
-          <button className="btn ghost" onClick={()=>{ setTmpSpecialist(String(settings?.specialist_id || '')); }}>Отменить</button>
+            {/* Настройки в правой колонке под Дневником */}
+            <SettingsPanel
+              saving={savingSettings}
+              onSave={async ()=>{
+                try {
+                  setSavingSettings(true);
+                  const tgId = getTelegramId(); if (!tgId) return; 
+                  const newSettings = { specialist_id: tmpSpecialist || null, timezone: tmpTimezone, preferred_units: tmpUnits, communication_mode: tmpComm } as const;
+                  const resp = await apiFetch(`/api/settings?telegram_id=${tgId}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(newSettings) });
+                  if (resp.ok) {
+                    setSettings({ ...settings, ...newSettings } as any);
+                    setTz(tmpTimezone);
+                  }
+                } catch {} finally {
+                  setSavingSettings(false);
+                }
+              }}
+              onCancel={()=>{
+                const s = settings || {} as any;
+                setTmpSpecialist(String(s.specialist_id || ''));
+                setTmpComm((s.communication_mode as any) || 'proactive_ai');
+                setTmpTimezone(String(s.timezone || 'Europe/Madrid'));
+                setTmpUnits((s.preferred_units as any) || 'metric');
+                setTz(String(s.timezone || 'Europe/Madrid'));
+              }}
+              tmpSpecialist={tmpSpecialist}
+              setTmpSpecialist={setTmpSpecialist}
+              tmpTimezone={tmpTimezone}
+              setTmpTimezone={setTmpTimezone}
+              tmpUnits={tmpUnits}
+              setTmpUnits={setTmpUnits}
+              tmpComm={tmpComm}
+              setTmpComm={setTmpComm}
+              tmpNotifStart={tmpNotifStart}
+              setTmpNotifStart={setTmpNotifStart}
+              tmpNotifEnd={tmpNotifEnd}
+              setTmpNotifEnd={setTmpNotifEnd}
+              tmpChJournal={tmpChJournal}
+              setTmpChJournal={setTmpChJournal}
+              tmpChAi={tmpChAi}
+              setTmpChAi={setTmpChAi}
+              tmpChContent={tmpChContent}
+              setTmpChContent={setTmpChContent}
+            />
         </div>
       </div>
+      )}
 
       {/* Нижний док с MainButton */}
       <MainButtonDock
         state={mbState}
         label={mainButtonLabel}
-        onClick={() => diaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        onClick={() => {
+          try {
+            if (isNarrow) {
+              setActiveTab('diary');
+              setTimeout(() => diaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+            } else {
+              diaryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          } catch {}
+        }}
       />
 
       {/* Модалки */}
@@ -1316,6 +1758,25 @@ export default function TelegramWebAppMainMockup() {
         {modal.type === 'food-del' && (
           <Modal title="Удалить блюдо" onClose={close} onSave={confirmFoodDelete} saveLabel="Удалить">
             <div className="subtle">Вы уверены, что хотите удалить <span className="mono">{foodList[deleteIndex]?.name}</span>?</div>
+          </Modal>
+        )}
+        {modal.type === 'favorites' && (
+          <Modal title="Любимые блюда" onClose={close} onSave={close} saveLabel="Закрыть">
+            <div className="space-y-2" style={{ maxHeight: 360, overflowY: 'auto' }}>
+              {(favorites||[]).length === 0 && (<div className="subtle">Пока пусто. Добавьте блюдо сердечком.</div>)}
+              {(favorites||[]).map(f => (
+                <div key={f.id} className="row-grid gap-2 items-center py-2 px-2 rounded-md">
+                  <div className="text-left truncate pr-3" title={f.name}>{f.name}</div>
+                  <div className="mono mr-1">{nf(f.kcal)}{'\u00A0'}ккал</div>
+                  <div className="flex items-center gap-1">
+                    <button className="tab" aria-label={`Добавить ${f.name} сегодня`} onClick={async()=>{
+                      try { const tgId = getTelegramId(); if (!tgId) return; const it = { name: f.name, unit: f.unit||'g', amount: Number(f.amount||0), kcal: Number(f.kcal||0), protein_g: Number(f.protein_g||0), fat_g: Number(f.fat_g||0), carb_g: Number(f.carb_g||0) }; await apiFetch(`/api/meals?telegram_id=${tgId}&tz=${encodeURIComponent(tz)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: new Date(new Date().getTime()-new Date().getTimezoneOffset()*60000).toISOString(), type: null, items: [it], notes: 'fav:add', status: 'confirmed', source_chat_id: null, source_message_id: null, source_update_id: null }) }); close(); setTimeout(()=>{ fetchAll(); }, 100); } catch {}
+                    }}>+</button>
+                    <button className="tab" aria-label={`Удалить ${f.name} из избранного`} onClick={async()=>{ await deleteFavorite(f.id); }}>🗑</button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </Modal>
         )}
       </div></div>

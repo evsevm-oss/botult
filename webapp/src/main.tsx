@@ -3,6 +3,24 @@ import { createRoot } from 'react-dom/client'
 import TelegramWebAppMainMockup from './TelegramWebAppMainMockup'
 import { ensureAuth } from './auth'
 
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: any }>{
+  constructor(props: { children: React.ReactNode }){ super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error: any){ return { error }; }
+  componentDidCatch(error: any){ try { console.error('App crash:', error); } catch {}
+    try { (window as any).Telegram?.WebApp?.showPopup?.({ title: 'Ошибка', message: String(error?.message||error), buttons: [{ type: 'ok' }] }); } catch {}
+  }
+  render(){ if (this.state.error){ return (
+    <div style={{ padding: 12 }}>
+      <div style={{ padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' }}>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>Произошла ошибка интерфейса</div>
+        <div style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', fontSize: 12 }}>{String(this.state.error?.message || this.state.error)}</div>
+      </div>
+    </div>
+  ); }
+    return this.props.children as any;
+  }
+}
+
 function MealsPage() {
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -75,12 +93,17 @@ function MealsPage() {
   )
 }
 
-ensureAuth().finally(() => {
-  createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
+// Render immediately to avoid blank screen if auth is slow/unavailable
+const root = createRoot(document.getElementById('root')!);
+root.render(
+  <React.StrictMode>
+    <ErrorBoundary>
       <TelegramWebAppMainMockup />
-    </React.StrictMode>
-  )
-})
+    </ErrorBoundary>
+  </React.StrictMode>
+);
+
+// Run auth refresh in background (non-blocking)
+ensureAuth().catch(() => { /* ignore auth errors at boot; UI can still work */ });
 
 

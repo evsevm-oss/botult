@@ -124,11 +124,13 @@ class UserSettingsDTO(BaseModel):
     locale: Literal["ru", "en"] | None = None
     notify_enabled: bool | None = None
     notify_times: list[str] | None = None
+    comm_channels: dict | None = None  # {journal_reminders: bool, ai_diet: bool, extra_content: bool}
     newsletter_opt_in: bool | None = None
     favorites_enabled: bool | None = None
     allow_personal_recipes: bool | None = None
     export_requested_at: datetime | None = None
     delete_requested_at: datetime | None = None
+    communication_mode: Literal["journal_only", "journal_plus_ai", "proactive_ai"] | None = None
 
 
 # BodyFat

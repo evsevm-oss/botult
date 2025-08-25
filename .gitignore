@@ -33,3 +33,9 @@ update.zip
 infra/telegram_web_app_main.jsx
 
 
+
+# Backups
+*.tar.gz
+
+deploy.zip
+*.zip

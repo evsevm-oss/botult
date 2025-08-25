@@ -6,6 +6,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
 import httpx
 from core.config import settings
+from pathlib import Path
 
 from domain.use_cases import CalculateBudgetsInput, calculate_budgets
 from infra.cache.redis import redis_client
@@ -27,13 +28,34 @@ async def cmd_start(message: Message) -> None:
     await message.answer("Привет! Я твой кибер-робот Ultima, я помогу сделать твою диету максимльно простой и результативной. Пожалуйста, посмотри видео про мои возможности:")
     try:
         from aiogram.types import FSInputFile
-        video = FSInputFile("data/content/templates/video/ready_video/first.mp4")
+        base = Path(__file__).resolve().parents[2] / "data/content/templates/video/ready_video"
+        # robust resolve for first video filename
+        candidates = [
+            "FirstVideo.mp4",
+            "first.mp4",
+            "First Video.mp4",
+        ]
+        video_file = None
+        for name in candidates:
+            p = base / name
+            if p.exists():
+                video_file = p
+                break
+        if video_file is None:
+            # glob fallback
+            for p in base.glob("*First*Video*.mp4"):
+                if p.is_file():
+                    video_file = p
+                    break
+        if video_file is None:
+            raise FileNotFoundError("First video file not found")
+        video = FSInputFile(str(video_file))
         # Кнопка: используем общий генератор с cache-busting
         from bot.keyboards import webapp_cta_kb as _webapp_kb
         btn_kb = _webapp_kb(screen="dashboard")
         await message.answer_video(
             video=video,
-            caption="Далее нажми «Открыть Ultima App» и выбери текущую цель. Другие параметры пока не вводи.",
+            caption="После просмотра видео нажми «Открыть Ultima App» и выбери текущую цель. Другие параметры пока не вводи.",
             reply_markup=(btn_kb if btn_kb is not None else kb),
         )
     except Exception:

@@ -19,6 +19,7 @@ from domain.use_cases import (
 from infra.db.session import get_session
 from infra.db.repositories.daily_summary_repo import DailySummaryRepo
 from fastapi import Depends, Request, Body
+import asyncio
 import time
 import structlog
 from zoneinfo import ZoneInfo
@@ -47,6 +48,7 @@ from infra.db.repositories.profile_repo import ProfileRepo
 from infra.db.repositories.goal_repo import GoalRepo
 from infra.db.repositories.weight_repo import WeightRepo
 from infra.db.repositories.user_settings_repo import UserSettingsRepo
+import uuid as _uuid
 from infra.cache.redis import redis_client
 from fastapi import Response
 import json as _json
@@ -56,6 +58,7 @@ from services.vision.queue import enqueue as enqueue_vision, VisionTask, get_sta
 from infra.db.repositories.image_repo import ImageRepo
 from infra.cache.redis import redis_client as _redis
 from aiogram import Bot as TgBot
+from aiogram.types import BufferedInputFile
 
 
 def create_app() -> FastAPI:
@@ -205,7 +208,11 @@ def create_app() -> FastAPI:
         users = UserRepo(session)
         settings_repo = UserSettingsRepo(session)
         user_id = await users.get_or_create_by_telegram_id(telegram_id)
-        await settings_repo.upsert(user_id, data=payload.model_dump(exclude_none=True))
+        incoming = payload.model_dump(exclude_none=True)
+        # Merge with existing prefs to avoid dropping other keys
+        current = await settings_repo.get(user_id) or {}
+        current.update(incoming)
+        await settings_repo.upsert(user_id, data=current)
         return APIResponse(ok=True, data={"ok": True})
 
     # Goals CRUD
@@ -640,29 +647,60 @@ def create_app() -> FastAPI:
         base = Path(__file__).resolve().parents[2] / "data/content/templates/video/ready_video"
         caption = ""
         video_path = None
+        # resolve filename robustly: support different dash variants and spacing
+        def _resolve_video(base_dir: Path, index: str) -> Path | None:
+            candidates = [
+                f"Ultima — SecondVideo {index}.mp4",  # em dash
+                f"Ultima – SecondVideo {index}.mp4",  # en dash
+                f"Ultima - SecondVideo {index}.mp4",  # hyphen
+                f"Ultima—SecondVideo {index}.mp4",
+                f"Ultima–SecondVideo {index}.mp4",
+                f"Ultima-SecondVideo {index}.mp4",
+            ]
+            for name in candidates:
+                p = base_dir / name
+                if p.exists():
+                    return p
+            # glob fallback
+            try:
+                for p in base_dir.glob(f"*SecondVideo*{index}*.mp4"):
+                    if p.is_file():
+                        return p
+            except Exception:
+                pass
+            return None
+
         if mode == "loss":
             caption = "Новая стратегия — Снижение веса (похудение). Посмотри видео и введи нужные данные."
-            video_path = base / "Ultima — SecondVideo 1.mp4"
+            video_path = _resolve_video(base, "1")
             kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть Ultima App", web_app={"url": web_url}), InlineKeyboardButton(text="Заполнить позже", callback_data="goal_later")]])
         elif mode == "maint":
             caption = "Новая стратегия — Поддержание веса. Посмотри видео и введи нужные данные."
-            video_path = base / "Ultima — SecondVideo 2.mp4"
+            video_path = _resolve_video(base, "2")
             kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть Ultima App", web_app={"url": web_url}), InlineKeyboardButton(text="Заполнить позже", callback_data="goal_later")]])
         elif mode == "gain":
             caption = "Новая стратегия — Рост мышечной массы. Посмотри видео и введи нужные данные."
-            video_path = base / "Ultima — SecondVideo 3.mp4"
+            video_path = _resolve_video(base, "3")
             kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Открыть Ultima App", web_app={"url": web_url}), InlineKeyboardButton(text="Заполнить позже", callback_data="goal_later")]])
         else:
             caption = "Новая стратегия — Контроль потребления (без целей по весу). Посмотри видео и введи нужные данные."
-            video_path = base / "Ultima — SecondVideo 4.mp4"
+            video_path = _resolve_video(base, "4")
             kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Продолжить", callback_data="goal_continue")]])
+        try:
+            log.info("goal_notify_video_resolve", base=str(base), path=str(video_path) if video_path else None, exists=bool(video_path and video_path.exists()))
+        except Exception:
+            pass
         try:
             if video_path and video_path.exists():
                 await bot.send_video(chat_id=int(telegram_id), video=FSInputFile(str(video_path)), caption=caption, reply_markup=kb)
             else:
                 # fallback to message only
                 await bot.send_message(chat_id=int(telegram_id), text=caption, reply_markup=kb)
-        except Exception:
+        except Exception as e:
+            try:
+                log.error("goal_notify_send_error", error=str(e))
+            except Exception:
+                pass
             return APIResponse(ok=False, error={"code": "E_SEND", "message": "Failed to send"})
         return APIResponse(ok=True, data={"sent": True})
 
@@ -1232,6 +1270,169 @@ def create_app() -> FastAPI:
         lines = ["date,kcal,protein_g,fat_g,carb_g"] + [f"{i['date']},{i['kcal']},{i['protein_g']},{i['fat_g']},{i['carb_g']}" for i in items]
         csv = "\n".join(lines)
         return Response(content=csv, media_type="text/csv")
+
+    # Export: full meals CSV for user
+    @app.get("/api/meals/export.csv")
+    async def meals_export_csv(telegram_id: int, tz: str | None = None, session: AsyncSession = Depends(get_session)) -> Response:
+        users = UserRepo(session)
+        repo = MealRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        # Load all meals for this user
+        from sqlalchemy import select
+        from infra.db.models import Meal, MealItem
+        rows = (await session.execute(select(Meal).where(Meal.user_id == user_id).order_by(Meal.at.asc()))).scalars().all()
+        if not rows:
+            return Response(content="date,time,name,amount,unit,kcal,protein_g,fat_g,carb_g\n", media_type="text/csv")
+        meal_ids = [m.id for m in rows]
+        items_res = await session.execute(select(MealItem).where(MealItem.meal_id.in_(meal_ids)))
+        items = items_res.scalars().all()
+        # Map items per meal
+        from zoneinfo import ZoneInfo as _ZI
+        tzname = tz or "Europe/Madrid"
+        z = None
+        try:
+            z = _ZI(tzname)
+        except Exception:
+            z = _ZI("UTC")
+        lines = ["date,time,name,amount,unit,kcal,protein_g,fat_g,carb_g"]
+        items_by_meal: dict[int, list] = {}
+        for it in items:
+            items_by_meal.setdefault(it.meal_id, []).append(it)
+        for m in rows:
+            local_dt = m.at.astimezone(z)
+            d = local_dt.date().isoformat()
+            t = local_dt.time().strftime("%H:%M:%S")
+            for it in items_by_meal.get(m.id, []):
+                lines.append(
+                    f"{d},{t}," +
+                    f"{(it.name or '').replace(',', ' ').strip()},{it.amount},{it.unit},{it.kcal},{it.protein_g},{it.fat_g},{it.carb_g}"
+                )
+        csv = "\n".join(lines) + "\n"
+        headers = {"Content-Disposition": "attachment; filename=meals_export.csv"}
+        return Response(content=csv, media_type="text/csv", headers=headers)
+
+    # Export token for Google Sheets IMPORTDATA
+    @app.post("/api/meals/export-token", response_model=APIResponse)
+    async def meals_export_token(telegram_id: int) -> APIResponse:
+        import time, jwt
+        now = int(time.time())
+        exp = now + 24 * 60 * 60  # 24h token
+        claims = {"tid": int(telegram_id), "iat": now, "exp": exp, "scope": "export"}
+        token = jwt.encode(claims, settings.webapp_jwt_secret, algorithm="HS256")
+        return APIResponse(ok=True, data={"token": token, "exp": exp})
+
+    # Public export by token (no auth header, for Google Sheets IMPORTDATA)
+    @app.get("/api/meals/export.csv/public")
+    async def meals_export_csv_public(token: str, tz: str | None = None, session: AsyncSession = Depends(get_session)) -> Response:
+        import jwt
+        try:
+            claims = jwt.decode(token, settings.webapp_jwt_secret, algorithms=["HS256"])
+            if claims.get("scope") != "export":
+                raise HTTPException(status_code=403, detail="E_SCOPE")
+            telegram_id = int(claims.get("tid") or 0)
+            if telegram_id <= 0:
+                raise HTTPException(status_code=400, detail="E_BAD_TID")
+        except Exception:
+            raise HTTPException(status_code=401, detail="E_TOKEN")
+        # Reuse internal builder
+        return await meals_export_csv(telegram_id=telegram_id, tz=tz, session=session)
+
+    # Send CSV export to Telegram chat
+    @app.post("/api/meals/export-send", response_model=APIResponse)
+    async def meals_export_send(telegram_id: int, tz: str | None = None, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        # Build CSV same as export.csv
+        from sqlalchemy import select
+        from infra.db.models import Meal, MealItem
+        rows = (await session.execute(select(Meal).where(Meal.user_id == user_id).order_by(Meal.at.asc()))).scalars().all()
+        tzname = tz or "Europe/Madrid"
+        from zoneinfo import ZoneInfo as _ZI
+        try:
+            z = _ZI(tzname)
+        except Exception:
+            z = _ZI("UTC")
+        lines = ["date,time,name,amount,unit,kcal,protein_g,fat_g,carb_g"]
+        if rows:
+            meal_ids = [m.id for m in rows]
+            items_res = await session.execute(select(MealItem).where(MealItem.meal_id.in_(meal_ids)))
+            items = items_res.scalars().all()
+            items_by_meal: dict[int, list] = {}
+            for it in items:
+                items_by_meal.setdefault(it.meal_id, []).append(it)
+            for m in rows:
+                local_dt = m.at.astimezone(z)
+                d = local_dt.date().isoformat()
+                t = local_dt.time().strftime("%H:%M:%S")
+                for it in items_by_meal.get(m.id, []):
+                    lines.append(
+                        f"{d},{t},{(it.name or '').replace(',', ' ').strip()},{it.amount},{it.unit},{it.kcal},{it.protein_g},{it.fat_g},{it.carb_g}"
+                    )
+        csv = "\n".join(lines) + "\n"
+        # Send via bot in background to avoid blocking API
+        async def _send_csv(chat_id: int, content: str) -> None:
+            token = (settings.telegram_bot_token or "").strip().strip("'").strip('"')
+            if not token:
+                return
+            bot = TgBot(token=token)
+            try:
+                buf = BufferedInputFile(bytes(content, encoding="utf-8"), filename="meals_export.csv")
+                await bot.send_document(chat_id=int(chat_id), document=buf, caption="Экспорт дневника (CSV)")
+            finally:
+                try:
+                    await bot.session.close()
+                except Exception:
+                    pass
+        asyncio.create_task(_send_csv(int(telegram_id), csv))
+        return APIResponse(ok=True, data={"scheduled": True})
+
+    # Favorites (stored in user_settings.data.favorites)
+    @app.get("/api/favorites", response_model=APIResponse)
+    async def favorites_list(telegram_id: int, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        us = UserSettingsRepo(session)
+        data = await us.get(user_id) or {}
+        favs = data.get("favorites") or []
+        return APIResponse(ok=True, data={"items": favs})
+
+    @app.post("/api/favorites", response_model=APIResponse)
+    async def favorites_add(telegram_id: int, request: Request, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        payload = await request.json()
+        item = {
+            "id": payload.get("id") or _uuid.uuid4().hex,
+            "name": payload.get("name"),
+            "unit": payload.get("unit") or "g",
+            "amount": float(payload.get("amount") or 0.0),
+            "kcal": float(payload.get("kcal") or 0.0),
+            "protein_g": float(payload.get("protein_g") or 0.0),
+            "fat_g": float(payload.get("fat_g") or 0.0),
+            "carb_g": float(payload.get("carb_g") or 0.0),
+        }
+        users = UserRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        us = UserSettingsRepo(session)
+        data = await us.get(user_id) or {}
+        favs = list(data.get("favorites") or [])
+        # prevent exact duplicates by name+unit+amount+kcal
+        if not any((f.get("name"), f.get("unit"), f.get("amount"), f.get("kcal")) == (item["name"], item["unit"], item["amount"], item["kcal"]) for f in favs):
+            favs.append(item)
+            data["favorites"] = favs
+            await us.upsert(user_id, data)
+        return APIResponse(ok=True, data={"id": item["id"]})
+
+    @app.delete("/api/favorites/{fav_id}", response_model=APIResponse)
+    async def favorites_delete(fav_id: str, telegram_id: int, session: AsyncSession = Depends(get_session)) -> APIResponse:
+        users = UserRepo(session)
+        user_id = await users.get_or_create_by_telegram_id(telegram_id)
+        us = UserSettingsRepo(session)
+        data = await us.get(user_id) or {}
+        favs = list(data.get("favorites") or [])
+        nfavs = [f for f in favs if str(f.get("id")) != str(fav_id)]
+        if len(nfavs) != len(favs):
+            data["favorites"] = nfavs
+            await us.upsert(user_id, data)
+        return APIResponse(ok=True, data={"deleted": True})
 
     # Stage 9: receive photo (raw MVP), store to object storage and index
     @app.post("/api/photos", response_model=APIResponse)
