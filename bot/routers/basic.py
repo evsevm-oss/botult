@@ -152,7 +152,6 @@ async def on_photo(message: Message) -> None:
         # одиночное фото: запросим превью с БЖУ и быстрыми опциями
         if last_image_id:
             async with httpx.AsyncClient(base_url=settings.api_base_url, timeout=20.0) as client:
-                # попытаемся сразу получить последний инференс и показать предпросмотр
                 cr = await client.get(f"/api/photos/{last_image_id}/status")
                 data = cr.json().get("data") if cr.status_code == 200 else None
                 items = (data or {}).get("items") or []
@@ -178,7 +177,41 @@ async def on_photo(message: Message) -> None:
                     ])
                     await message.answer(f"Предварительная нормализация (фото):\n{preview}", reply_markup=kb)
                 else:
+                    # Сообщим о постановке в очередь и начнем опрос статуса в фоне
                     await message.answer("Фото получено. Поставлено в очередь на распознавание. Сообщу, когда будет готово.")
+                    async def _poll_status(img_id: int, chat_id: int) -> None:
+                        try:
+                            for _ in range(45):  # ~90 секунд (каждые 2 сек)
+                                await asyncio.sleep(2.0)
+                                async with httpx.AsyncClient(base_url=settings.api_base_url, timeout=20.0) as c2:
+                                    sr = await c2.get(f"/api/photos/{img_id}/status")
+                                    sdata = sr.json().get("data") if sr.status_code == 200 else None
+                                    sitms = (sdata or {}).get("items") or []
+                                    if sitms:
+                                        lines = []
+                                        for it in sitms:
+                                            name = it.get("name", "?")
+                                            amt = int(float(it.get("amount", 0) or 0))
+                                            unit = it.get("unit", "g")
+                                            kcal = int(float(it.get("kcal", 0) or 0))
+                                            p = int(float(it.get("protein_g", 0) or 0))
+                                            f = int(float(it.get("fat_g", 0) or 0))
+                                            c = int(float(it.get("carb_g", 0) or 0))
+                                            lines.append(f"• {name} — {amt}{unit} ≈ {kcal} ккал\n  Протеин: {p} г. | Жиры: {f} г. | Углеводы: {c} г.")
+                                        text = "\n".join(lines)
+                                        clar2 = (sdata or {}).get("clarifications") or []
+                                        if clar2:
+                                            text += "\n\nУточните:\n" + "\n".join(f"— {c}" for c in clar2[:5])
+                                        kb2 = InlineKeyboardMarkup(inline_keyboard=[
+                                            [InlineKeyboardButton(text="Сохранить", callback_data=f"photo_save:{img_id}")],
+                                            [InlineKeyboardButton(text="Дополнить", callback_data=f"photo_refine:{img_id}")],
+                                            [InlineKeyboardButton(text="Отменить", callback_data=f"photo_cancel:{img_id}")],
+                                        ])
+                                        await message.answer(f"Предварительная нормализация (фото):\n{text}", reply_markup=kb2)
+                                        return
+                        except Exception:
+                            return
+                    asyncio.create_task(_poll_status(last_image_id, message.chat.id))
         else:
             await message.answer("Фото получено. Поставлено в очередь на распознавание. Сообщу, когда будет готово.")
 
